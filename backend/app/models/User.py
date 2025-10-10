@@ -1,4 +1,26 @@
-class Player:
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
+from sqlalchemy import String, Integer, Boolean, ForeignKey
+from typing import List, Optional
+class Base(DeclarativeBase):
+    pass
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False,unique=True)
+    password: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(100), nullable=True)
+    token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    
+
+
+
+
+
+
+
+
+class Playerr:
     def __init__(self, name, piece):
         self.name = name
         self.piece = piece
