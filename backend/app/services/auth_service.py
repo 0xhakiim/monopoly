@@ -24,7 +24,9 @@ def authenticate_user( username: str, password: str):
     user = session.query(User).filter_by(username=username).first()
     if not user:
         return False
-    return check_password(password, user.hashed_password)
+    if check_password(password, user.password):
+        return create_token(user.id)
+
 
 def create_token(user_id: int):
     payload = {
@@ -48,3 +50,6 @@ def hash_password(password: str) -> str:
 
 def check_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+def get_all_users():
+    session = db()
+    return session.query(User).all()

@@ -4,6 +4,10 @@ from app.services import auth_service
 from typing import List, Optional
 
 router = APIRouter()
+@router.get("/auth/dump")
+async def dump_users():
+    users = auth_service.get_all_users()
+    return {"users": [user.username for user in users]}
 
 @router.get("/auth/status")
 async def auth_status():

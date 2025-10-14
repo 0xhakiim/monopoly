@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
-from app.models.game import game
+from app.models.Game import Game
+from app.models.gamesManager import gamesManager
 
 router = APIRouter()
 queue =[]
@@ -34,8 +35,12 @@ async def join_queue(ws: WebSocket):
                 player2 = queue.pop(0)
                 
                 await ws.send_text(f"Game created with players {player1} and {player2}.")
+                game_manager = gamesManager()
+                game = game_manager.create_game([player1, player2])
+                return game.id
     except WebSocketDisconnect:
         if player_id in queue:
             queue.remove(player_id)
             connections.pop(player_id, None)
+
         

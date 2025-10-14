@@ -1,21 +1,22 @@
 import random
 from typing import List
-
-class game:
-    def __init__(self, name,players:List[int]):
+from app.models.board import get_board
+class Game:
+    def __init__(self,id,players:List[int]):
+        self.id = id
         self.players = players
-        self.name = name
         self.id = random.randint(1000, 9999)
         self.state = {"turn": 0, "board": {}, "players": players}
         self.turn = 0
+        print(f"Game created with ID: {self.id} and players: {self.players}")  
     def get_id(self):
         return self.id
-    def start(self):
-        return f"Game {self.name} has started"
     def end(self):
         return f"Game {self.name} has ended"
     def roll_dice(self):
-        return random.randint(1, 6) + random.randint(1, 6)
+        new_pos= (random.randint(1, 6) + random.randint(1, 6))%40
+        self.handle_position(self.players[self.turn],new_pos)
+        return new_pos
     def get_players(self):
         return self.players
     def next_turn(self):
@@ -25,4 +26,8 @@ class game:
         current_player = self.players[self.turn]
         roll = self.roll_dice()
         return f"Player {current_player} rolled a {roll}"
-    
+    def get_state(self):
+        return self.state
+    def handle_position(self, player_id, posistion):
+        
+        return f"Player {player_id} performed action: {posistion}"
