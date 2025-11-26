@@ -6,6 +6,7 @@ interface DiceRollerProps {
   onRoll: (dice: number[]) => void;
   disabled: boolean;
   currentRoll: number[];
+
 }
 
 export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) => {
@@ -13,7 +14,7 @@ export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) =
 
   const rollDice = () => {
     setIsRolling(true);
-    
+
     // Animate dice roll
     const rollInterval = setInterval(() => {
       const dice = [
@@ -78,7 +79,7 @@ export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) =
           </div>
         ))}
       </div>
-      
+
       <Button
         onClick={rollDice}
         disabled={disabled || isRolling}
@@ -87,7 +88,7 @@ export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) =
       >
         {isRolling ? 'Rolling...' : 'Roll Dice'}
       </Button>
-      
+
       {currentRoll[0] > 0 && (
         <p className="text-lg font-semibold">
           Total: {currentRoll[0] + currentRoll[1]}

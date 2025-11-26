@@ -1,5 +1,8 @@
 import random
+from turtle import position
 from typing import List
+
+from sqlalchemy import true
 from app.models.board import get_board
 
 
@@ -7,7 +10,7 @@ class Game:
     def __init__(self, id, players: List[int]):
         self.id = id
         self.players = players
-        self.state = {"turn": 0, "board": {}, "players": players}
+        self.state = {"turn": 0, "board": {}, "positions": [0] * len(players)}
         self.turn = 0
         self.connections = {}
         print(f"Game created with ID: {self.id} and players: {self.players}")
@@ -18,16 +21,18 @@ class Game:
     def end(self):
         return f"Game {self.id} has ended"
 
-    def roll_dice(self):
-        new_pos = (random.randint(1, 6) + random.randint(1, 6)) % 40
-        self.handle_position(self.players[self.turn], new_pos)
-        return new_pos
+    def roll_dice(self) -> tuple[int, int]:
+        dice = (random.randint(1, 6), random.randint(1, 6))
+        self.handle_position(self.players[self.turn], (dice[0] + dice[1]) % 40)
+        self.next_turn()
+        return dice
 
     def get_players(self):
         return self.players
 
     def next_turn(self):
-        self.state = (self.turn + 1) % len(self.players)
+        self.state["turn"] = (self.turn + 1) % len(self.players)
+        self.turn = self.state["turn"]
         return self.players[self.turn]
 
     def play_turn(self):
@@ -38,9 +43,17 @@ class Game:
     def get_state(self):
         return self.state
 
-    def handle_position(self, player_id, posistion):
+    def handle_position(self, player_id, position):
 
-        return f"Player {player_id} performed action: {posistion}"
+        return f"Player {player_id} performed action: {position}"
+
+    def get_player_position(self, player_id) -> int:
+        return self.state["positions"][player_id]
+
+    def set_player_position(self, player_id: int, pos: int) -> bool:
+        print(self.state["positions"][player_id])
+        self.state["positions"][player_id] = pos
+        return True
 
     async def broadcast(self, message: dict):
         for ws in self.connections.values():

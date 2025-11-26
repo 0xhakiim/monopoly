@@ -7,7 +7,10 @@ export type PropertyColor =
     | 'yellow'
     | 'green'
     | 'darkBlue';
-
+export type WSMessage = {
+    action: string;
+    payload?: any;
+};
 export type SpaceType =
     | 'property'
     | 'railroad'
