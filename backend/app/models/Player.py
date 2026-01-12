@@ -1,18 +1,31 @@
-import User
-from sqlalchemy.orm import mapped_column, Mapped
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import String, Integer, Boolean, ForeignKey, create_engine
+from pydantic import BaseModel, Field, root_validator
 from typing import List, Optional
 
-Base = declarative_base()
 
-class Player:
-    __tablename__ = "players"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    userid: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    avatar: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    level: Mapped[int] = mapped_column(Integer, default=1)
+class Player(BaseModel):
+    """
+    Represents the mutable state of a single player in the Monopoly game.
+    """
 
+    id: int = Field(..., description="Unique ID for the player.")
+    money: int = Field(1500, description="Current cash balance, starting at $1500.")
+    position: int = Field(0, ge=0, le=39, description="Current board position (0-39).")
+    properties: List[int] = Field([], description="List of board IDs the player owns.")
+    name: str = Field(f"Player{id}", description="player name")
+    # Jail state management
+    in_jail: bool = Field(False, description="True if the player is currently in jail.")
+    jail_turns: int = Field(0, description="Number of turns spent in jail (max 3).")
+    get_out_of_jail_free: int = Field(
+        0, description="Count of 'Get Out of Jail Free' cards."
+    )
 
-engine = create_engine('mysql+pymysql://root:password@localhost/dbname')
-Base.metadata.create_all(engine)
+    # Status flags
+    is_bankrupt: bool = Field(
+        False, description="True if the player is out of the game."
+    )
+
+    @root_validator(pre=True)
+    def set_default_name(cls, values):
+        if "name" not in values or values["name"] is None:
+            values["name"] = f"Player{values['id']}"
+        return values

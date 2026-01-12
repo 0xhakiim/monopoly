@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo } from 'react';
 interface GameBoardProps {
     players: Player[];
 }
-export const GameBoard = ({ players = [{ id: 1, name: "", money: 1500, position: 0, color: "", properties: [] }] }: GameBoardProps) => {
+export const GameBoard = ({ players = [] }: GameBoardProps) => {
     const getIconForType = (space: typeof boardSpaces[0]) => {
         switch (space.type) {
             case 'railroad':

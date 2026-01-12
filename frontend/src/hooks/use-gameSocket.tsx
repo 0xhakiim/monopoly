@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-
+import { jwtDecode } from "jwt-decode";
 type WSMessage = {
     action: string;
     payload?: any;
@@ -34,16 +34,20 @@ export function useGameSocket(gameId?: string, playerId?: number, baseUrl: strin
     // Helper to parse incoming message (JSON or text)
     const handleIncoming = useCallback((raw: MessageEvent) => {
         let parsed: any = raw.data;
+        console.debug(parsed);
         try {
             parsed = JSON.parse(raw.data);
         } catch (e) {
             // leave as text if JSON parse fails
+            console.error("Failed to parse WS message as JSON", e);
         }
+        console.debug(parsed);
         setLastRawMessage(parsed);
 
         // If this is a game state broadcast, update gameState
-        if (parsed && parsed.type === "game_state") {
-            setGameState(parsed.payload);
+        if (parsed && (parsed.type === "game_state" || parsed.type === "game_start" || parsed.type === "player_joined" || parsed.type === "player_left" || parsed.type === "game_update" || parsed.type === "reset_game") && parsed.state) {
+            console.log("Updating game state from WS message", parsed.state);
+            setGameState(parsed.state);
         }
 
         // If backend uses other shapes (dice result etc.), caller can inspect lastRawMessage
@@ -52,9 +56,14 @@ export function useGameSocket(gameId?: string, playerId?: number, baseUrl: strin
     useEffect(() => {
         console.log("iterate")
         if (!gameId) return;
+        const token = localStorage.getItem("access_token");
+        let dec: { user_id: number, exp: number } = { user_id: 0, exp: 0 };
+        if (token) {
+            dec = jwtDecode(token);
+        }
 
         // Open register socket (to be added to game.connections on backend)
-        const registerUrl = `${baseUrl.replace(/^http/, "ws")}/ws/game/${gameId}?player_id=${playerId ?? 0}`;
+        const registerUrl = `${baseUrl.replace(/^http/, "ws")}/ws/game/${gameId}?token=${token}&player_id=${dec.user_id}`;
         const registerWs = new WebSocket(registerUrl);
         registerWsRef.current = registerWs;
 

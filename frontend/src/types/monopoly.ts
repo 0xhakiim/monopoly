@@ -32,7 +32,7 @@ export interface Property {
 
 export interface Player {
     id: number;
-    name: string;
+    name?: string;
     money: number;
     position: number;
     color: string;

@@ -20,9 +20,11 @@ async def register(data: registerUserSchema) -> TokenResponse:
             access_token="",
             token_type="",
         )
-    return TokenResponse(
+    token = TokenResponse(
         access_token=user["access_token"], token_type=user["token_type"]
     )
+    print(token)
+    return token
 
 
 @router.post("/auth/login")

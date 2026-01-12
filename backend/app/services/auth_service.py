@@ -3,8 +3,9 @@ from app.models.User import User
 import bcrypt
 import jwt
 import datetime
+from app.config import SECRET_KEY
 
-secret = "my_secret"
+secret = SECRET_KEY
 
 
 def register_user(username: str, password: str, email: str = ""):
@@ -20,15 +21,17 @@ def register_user(username: str, password: str, email: str = ""):
     token = create_token(new_user.id)  # or use username/email/etc.
     new_user.token = token  # assuming you have a `token` column
     session.commit()
-    return {"access_token": f"token_for_{new_user.username}", "token_type": "bearer"}
+    return {"access_token": new_user.token, "token_type": "bearer"}
 
 
 def authenticate_user(username: str, password: str):
     session = db()
     user = session.query(User).filter_by(username=username).first()
     if not user:
+        print("creds not correct")
         return False
     if check_password(password, user.password):
+        print("logged in")
         return create_token(user.id)
 
 

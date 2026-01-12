@@ -13,10 +13,10 @@ type UseGameSocketReturn = {
 
 // Default base (already WS-safe)
 const defaultBase =
-    import.meta.env.DEV
+    (import.meta.env.DEV
         ? "ws://localhost:8000"
         : (window.location.origin.startsWith("https") ? "wss://" : "ws://") +
-        window.location.host;
+        window.location.host);
 
 export default function useQueueSocket(
     baseUrl: string = defaultBase
@@ -36,7 +36,8 @@ export default function useQueueSocket(
     }, []);
 
     useEffect(() => {
-        const url = `${baseUrl}/ws/matchmaking`;
+        const token = localStorage.getItem("access_token");
+        const url = `${baseUrl}/ws/matchmaking?token=${token}`;
         const ws = new WebSocket(url);
 
         wsRef.current = ws;
@@ -70,6 +71,7 @@ export default function useQueueSocket(
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         ws.send(JSON.stringify(msg));
     }, []);
+
 
     return {
         connected,

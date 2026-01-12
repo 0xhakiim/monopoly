@@ -1,6 +1,6 @@
 import useQueueSocket from "@/hooks/use-queueSocket";
 import { useState, useEffect } from "react";
-
+import { jwtDecode } from "jwt-decode";
 import { useParams, useNavigate } from "react-router-dom";
 
 
@@ -11,6 +11,7 @@ import { useParams, useNavigate } from "react-router-dom";
 export const NewGame = () => {
     const { connected, sendAction, lastRawMessage } = useQueueSocket();
     const { id } = useParams<{ id: string }>();
+    const token = jwtDecode<{ user_id: number, exp: number }>(localStorage.getItem("access_token") ?? "");
     function joinQueue() {
         if (!connected) {
             console.warn("Not connected to queue socket");
@@ -31,7 +32,15 @@ export const NewGame = () => {
             console.debug(lastRawMessage);
             const gameId = lastRawMessage.game_id;
             console.debug(gameId);
-            navigate(`/game?gameId=${gameId}`);
+            console.log("players!!!!!!!!!!!!!1", lastRawMessage.players)
+            const token = jwtDecode<{ user_id: number, exp: number }>(localStorage.getItem("access_token") ?? "0");
+            let id;
+            for (let i of lastRawMessage.players) {
+                if (i[0] === token.user_id) {
+                    id = i[1].id;
+                }
+            }
+            navigate(`/game?gameId=${gameId}&playerId=${id}`);
         }
     }, [lastRawMessage, navigate]);
     return (

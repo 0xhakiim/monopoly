@@ -1,6 +1,6 @@
 import type { Player } from '@/types/monopoly';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
+
 import { cn } from '@/lib/utils';
 
 interface PlayerPanelProps {
@@ -8,8 +8,9 @@ interface PlayerPanelProps {
   currentPlayerId: number;
 }
 
-export const PlayerPanel = ({ players, currentPlayerId }: PlayerPanelProps) => {
-  return (
+export const PlayerPanel = ({ players = [], currentPlayerId = 0 }: PlayerPanelProps) => {
+  console.log(players)
+  return (<>{players &&
     <div className="flex flex-col gap-4">
       {players.map((player) => (
         <Card
@@ -37,7 +38,7 @@ export const PlayerPanel = ({ players, currentPlayerId }: PlayerPanelProps) => {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Properties:</span>
-              <span className="font-semibold">{player.properties.length}</span>
+              {player && player.properties && <span className="font-semibold">{player.properties.length ?? 0}</span>}
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Position:</span>
@@ -46,6 +47,6 @@ export const PlayerPanel = ({ players, currentPlayerId }: PlayerPanelProps) => {
           </CardContent>
         </Card>
       ))}
-    </div>
+    </div>}</>
   );
 };

@@ -5,26 +5,21 @@ import { cn } from '@/lib/utils';
 interface DiceRollerProps {
   onRoll: (dice: number[]) => void;
   disabled: boolean;
-  currentRoll: number[];
+  currentRoll: [number, number];
 
 }
 
-export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) => {
+export const DiceRoller = ({ onRoll, disabled, currentRoll = [0, 0] }: DiceRollerProps) => {
   const [isRolling, setIsRolling] = useState(false);
 
   const rollDice = () => {
     setIsRolling(true);
 
     // Animate dice roll
-    const rollInterval = setInterval(() => {
-      const dice = [
-        Math.floor(Math.random() * 6) + 1,
-        Math.floor(Math.random() * 6) + 1,
-      ];
-    }, 100);
+
 
     setTimeout(() => {
-      clearInterval(rollInterval);
+
       const finalDice = [
         Math.floor(Math.random() * 6) + 1,
         Math.floor(Math.random() * 6) + 1,
@@ -67,7 +62,7 @@ export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) =
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="flex gap-4">
-        {currentRoll.map((die, idx) => (
+        {currentRoll && currentRoll.map((die, idx) => (
           <div
             key={idx}
             className={cn(
@@ -89,7 +84,7 @@ export const DiceRoller = ({ onRoll, disabled, currentRoll }: DiceRollerProps) =
         {isRolling ? 'Rolling...' : 'Roll Dice'}
       </Button>
 
-      {currentRoll[0] > 0 && (
+      {currentRoll && currentRoll[0] > 0 && (
         <p className="text-lg font-semibold">
           Total: {currentRoll[0] + currentRoll[1]}
         </p>

@@ -6,6 +6,7 @@ from app.models.gamesManager import getsManager
 from contextlib import asynccontextmanager
 import app.db.init_db as db_init
 from app.models.board import get_board
+from app.assets.board import MONOPOLY_BOARD_SCHEMA
 
 
 @asynccontextmanager
@@ -16,9 +17,9 @@ async def lifespan(app: fastapi.FastAPI):
     SessionLocal = sessionmaker(bind=engine)
     gamesManager = getsManager()
     print("Database initialized")
-    board = get_board()
-    print(f"Board initialized with {len(board.tiles)} tiles")
-    app.state.board = board
+
+    print(f"Board schema loaded with {len(MONOPOLY_BOARD_SCHEMA)} squares")
+
     app.state.manager = gamesManager
     app.state.db_session = SessionLocal
     yield

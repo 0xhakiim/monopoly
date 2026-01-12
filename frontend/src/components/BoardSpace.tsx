@@ -8,7 +8,7 @@ interface BoardSpaceProps {
     position: 'bottom' | 'left' | 'top' | 'right';
 }
 
-export const BoardSpace = ({ space, players, position }: BoardSpaceProps) => {
+export const BoardSpace = ({ space, players }: BoardSpaceProps) => {
     const isCorner = space.type === 'corner';
 
     const getColorClass = () => {
@@ -42,7 +42,7 @@ export const BoardSpace = ({ space, players, position }: BoardSpaceProps) => {
                 return '';
         }
     };
-
+    const color = ["red", "blue"]
     // players: array of { id, color }
     // We'll render small circular pieces for each player in this tile.
     // To avoid pieces overlapping exactly we'll offset them slightly based on index.
@@ -53,7 +53,7 @@ export const BoardSpace = ({ space, players, position }: BoardSpaceProps) => {
             const style: React.CSSProperties = {
                 left: `${8 + offset}px`,
                 bottom: '8px',
-                backgroundColor: p.color,
+                backgroundColor: color[p.id],
             };
             return (
                 <div
