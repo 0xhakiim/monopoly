@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import type { GameState } from "@/types/monopoly";
 import { jwtDecode } from "jwt-decode";
 type WSMessage = {
     action: string;
@@ -45,7 +46,7 @@ export function useGameSocket(gameId?: string, playerId?: number, baseUrl: strin
         setLastRawMessage(parsed);
 
         // If this is a game state broadcast, update gameState
-        if (parsed && (parsed.type === "game_state" || parsed.type === "game_start" || parsed.type === "player_joined" || parsed.type === "player_left" || parsed.type === "game_update" || parsed.type === "reset_game") && parsed.state) {
+        if (parsed && parsed.state) {
             console.log("Updating game state from WS message", parsed.state);
             setGameState(parsed.state);
         }

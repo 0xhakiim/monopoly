@@ -7,6 +7,9 @@ class Player(BaseModel):
     Represents the mutable state of a single player in the Monopoly game.
     """
 
+    user_id: Optional[int] = Field(
+        None, description="The user ID associated with this player."
+    )
     id: int = Field(..., description="Unique ID for the player.")
     money: int = Field(1500, description="Current cash balance, starting at $1500.")
     position: int = Field(0, ge=0, le=39, description="Current board position (0-39).")

@@ -32,10 +32,17 @@ async def game_endpoint(
         await ws.send_json({"type": "error", "message": "Game not found"})
         await ws.close()
         return
+    await ws.send_json(
+        {
+            "type": "reconnect",
+            "state": {**game.state, "players": list(game.get_players().values())},
+        },
+    )
 
     # Helper function to get the current snapshot of the game
     def get_game_snapshot(event_type: str, extra_data: dict = None):
-        players_list = list(game.get_players().items())
+        players_list = list(game.get_players().values())
+        print(players_list)
         type = ""
         if event_type in (
             "game_start",
@@ -47,15 +54,11 @@ async def game_endpoint(
         ):
             type = "game_state"
         snapshot = {
-            "type": type,
+            "type": event_type,
             "state": {
-                "action": event_type,
-                "turn_index": game.state["turn_index"],
-                "positions": [p.position for p in game.players_map.values()],
-                "money": [p.money for p in game.players_map.values()],
-                "board": game.state["mutable_properties"],
+                **game.state,
                 "players": players_list,
-                "phase": game.state["phase"],
+                "turn": game.turn.player_id,
             },
         }
         if extra_data:
@@ -78,7 +81,7 @@ async def game_endpoint(
             # (Only validate for actions that require a turn)
             is_turn = game.state["turn_index"] == current_player.id
             if (
-                data.action in ["roll_dice", "buy_property", "pass_on_buy", "end_turn"]
+                data.action in ["roll_dice", "buy_property", "pass_on_buy"]
                 and not is_turn
             ):
                 await ws.send_json({"type": "error", "message": "Not your turn!"})
@@ -91,7 +94,7 @@ async def game_endpoint(
 
             elif data.action == "roll_dice":
                 print("Rolling dice")
-                dice_result = game.roll_dice(player_id)
+                dice_result = await game.roll_dice(player_id)
 
                 # Check if we landed on a property to trigger the BUY phase
                 extra = {
@@ -110,28 +113,37 @@ async def game_endpoint(
                 data.action == "buy_property" and game.state["phase"] == "DECIDE_TO_BUY"
             ):
                 print("Buying property")
-                game.buy_property(player_id, current_player.position)
+                await game.buy_property(player_id, current_player.position)
                 await game.broadcast(get_game_snapshot("property_bought"))
 
+            # auction start
             elif (
                 data.action == "pass_on_buy" and game.state["phase"] == "DECIDE_TO_BUY"
             ):
                 print("Passing on buying property: ", game.state["turn_index"])
                 game.state["phase"] = "AUCTION_PROPERTY"
-                game.start_auction(current_player.position)
-                await game.broadcast(get_game_snapshot("auction_started"))
+                await game.start_auction(current_player.position, player_id)
 
-            elif data.action == "end_turn":
-                print("Ending turn")
-                game.next_turn()
-                await game.broadcast(get_game_snapshot("end_turn"))
+            if game.state["phase"] == "AUCTION":
+                if data.action == "place_bid":
+                    print("bidding !!!!!!!!!!!", game.state)
 
+                    print(f"Player {player_id} placing bid")
+                    bid_amount = data.payload.get("amount", 0)
+                    print(f"Bid amount: {bid_amount}")
+                    await game.place_bid(player_id, bid_amount)
+                elif data.action == "fold_auction":
+                    print(f"Player {player_id} folding from auction")
+                    await game.fold_auction(player_id)
+            if game.state["phase"] == "WAIT_FOR_NEXT_TURN":
+                if game.turn.active == False:
+                    print(f"Player {player_id} ending turn")
+                    game.end_turn()
+                    await game.broadcast(get_game_snapshot("end_turn"))
+                else:
+                    game.state["phase"] = "WAIT_FOR_ROLL"
+                    await game.broadcast(get_game_snapshot("roll_dice"))
     except WebSocketDisconnect:
         print(f"Player {player_id} disconnected from {uuid}")
         if player_id in game.connections:
             del game.connections[player_id]
-
-    except Exception as e:
-        print(f"Error: {e}")
-        await ws.send_json({"type": "error", "message": "Internal server error"})
-        await ws.close()

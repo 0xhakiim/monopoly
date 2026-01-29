@@ -3,40 +3,23 @@ import { GameBoard } from '@/components/GameBoard';
 import { DiceRoller } from '@/components/DiceRoller';
 import { PlayerPanel } from '@/components/PlayerPanel';
 import { Button } from '@/components/ui/button';
-import type { Player } from '@/types/monopoly';
+import type { Player, SquareTile, auctionState } from '@/types/monopoly';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+
 import { useGameSocket } from "@/hooks/use-gameSocket";
+import AuctionModel from '@/components/Auction';
+
+
+
 type IncomingPlayerTuple = [number, Player];
 type IncomingData = IncomingPlayerTuple[];
-interface PropertyDetails {
-    price: number;
-    rent: number[]; // Added based on user's example
-    house_cost: number; // Added based on user's example
-    group_id: string; // Added based on user's example
-}
 
 // Renamed from PropertyForSale to SquareTile to accurately reflect the full Pydantic model
-interface SquareTile {
-    id: number;
-    name: string;
-    type: string;
-    details?: PropertyDetails; // Price lives here for purchasable tiles
-    tax_amount?: number;
-}
 
 
 
-interface GameState {
-    turn_index: number;
-    positions: Record<number, number>; // player ID -> position
-    money: Record<number, number>; // player ID -> money
-    board: any; // mutable_properties array/object
-    players: IncomingPlayerTuple[];
-    phase: string;
-    propertyForSale?: SquareTile;
-    dice?: [number, number];
-}
+
+
 export function parsePlayerList(incomingdata: IncomingData): Player[] {
     // Use .map() to iterate over the outer array.
     // For each inner array [tokenId, playerObject], we return the playerObject (index 1).
@@ -44,6 +27,20 @@ export function parsePlayerList(incomingdata: IncomingData): Player[] {
         return [];
     }
     return incomingdata.map(([, playerObject]) => playerObject);
+}
+export function transformPlayers(playersDict: Record<string, Player> | undefined): Player[] {
+    if (!playersDict) return [];
+    return Object.entries(playersDict).map(([globalId, playerObj]) => ({
+        ...playerObj,
+        globalUserId: globalId, // The ID from the token/map key
+    })).sort((a, b) => a.id - b.id);
+}
+export function playersDictToArray(dict: Record<string, Player> | undefined): Player[] {
+    if (!dict) return [];
+    return Object.entries(dict).map(([userId, playerObj]) => ({
+        ...playerObj,
+        globalUserId: Number(userId), // Keep track of the map key
+    })).sort((a, b) => a.id - b.id); // Sort by local turn index
 }
 const BuyDecisionModal = ({ property, onBuy, onPass, isAffordable }: { property: SquareTile, onBuy: () => void, onPass: () => void, isAffordable: boolean }) => {
     return (
@@ -86,21 +83,50 @@ const Index = () => {
     const { connected, sendAction, lastRawMessage, gameState } = useGameSocket(localGameId, localPlayerId);
 
     // We will derive players and currentTurnPlayerId from gameState
-    const players: Player[] = parsePlayerList(gameState?.players ?? []) || [];
+    const playersDict: Record<string, Player> = gameState?.players || {};
+    const playersArray: Player[] = gameState?.players || [];
+    const players = playersArray
+    const localPlayer = playersArray.find(p => p.id === localPlayerId) || null;
 
     // Architectural Fix: The player whose turn it is must come from the server state
-    const currentTurnPlayerId: number | undefined = gameState?.turn_index;
+    const currentTurnPlayerId: number | undefined = gameState?.turn;
 
     const [lastDice, setLastDice] = useState<[number, number] | [0, 0]>([0, 0]);
-    const localPlayer = players.find(p => p.id === localPlayerId);
+
     const isDecideToBuyPhase = (((gameState?.phase ?? "") == "DECIDE_TO_BUY") && (currentTurnPlayerId === localPlayerId));
     console.log("local player id:", localPlayerId);
     console.log("current turn player id:", currentTurnPlayerId);
 
-    const navigate = useNavigate();
+    //const [cachedLocalPlayer, setCachedLocalPlayer] = useState<Player | null>(localPlayer ?? null);
+
+    const [cachedLocalPlayer, setCachedLocalPlayer] = useState<Player | null>(null);
+    useEffect(() => {
+        if (localPlayer) {
+            setCachedLocalPlayer(localPlayer);
+        }
+    }, [localPlayer]);
     const propertyForSale: SquareTile | undefined = gameState?.propertyForSale;
 
+    const isAuctionPhase = gameState?.phase === "AUCTION_PROPERTY" || gameState?.phase === "AUCTION";
 
+    const auction: auctionState | undefined = gameState?.auction;
+    const highestBidder = auction?.highest_bidder
+    const handleBid = async (amount: number) => {
+
+        await sendAction({
+            action: "place_bid",
+            payload: { amount }
+        });
+        console.log("Placed bid of amount:", amount);
+    };
+
+    const handleFold = async () => {
+
+        await sendAction({
+            action: "fold_auction"
+        });
+        console.log("Folded from auction");
+    };
 
     // Calculate purchasePrice by looking into the nested 'details' object (This logic is correct)
     const purchasePrice = propertyForSale?.details?.price;
@@ -142,7 +168,7 @@ const Index = () => {
     }, [connected, gameState, lastRawMessage]); // Depend on gameState and lastRawMessage
 
     // Helper to find the current player object
-    const currentTurnPlayer = players.find(p => p.id === currentTurnPlayerId);
+    const currentTurnPlayer = gameState?.turn
 
     // Check if it's the local client's turn to enable/disable controls
     const isLocalPlayersTurn = currentTurnPlayerId === localPlayerId;
@@ -187,8 +213,19 @@ const Index = () => {
     const handleResetGame = async () => {
         await sendAction({ action: "reset_game" });
     };
+    window.document.title = `Monopoly Game ${localGameId || ""} - Player ${localPlayer?.name || ""}`;
+    window.auction = auction; // For debugging
+    window.gameState = gameState; // For debugging
+    window.players = players; // For debugging
+    window.isAuctionPhase = isAuctionPhase // For debugging
+    window.localPlayer = localPlayer; // For debugging
+    window.currentPlayer = currentTurnPlayer; // For debugging
+    window.propertyForSale = propertyForSale; // For debugging
+    window.propertyForSale = propertyForSale; // For debugging
+    window.isDecideToBuyPhase = isDecideToBuyPhase; // For debugging
     return (
         <div className="min-h-screen bg-background p-8">
+
             <Button
                 onClick={handleResetGame}
                 variant="destructive"
@@ -199,7 +236,7 @@ const Index = () => {
 
                     {/* Buy Decision Modal */}
                     {
-                        isDecideToBuyPhase && isLocalPlayersTurn && propertyForSale && (
+                        isDecideToBuyPhase && propertyForSale && (
 
                             <BuyDecisionModal
                                 property={propertyForSale}
@@ -209,17 +246,28 @@ const Index = () => {
                             />
                         )}
                     {/* Left panel - Players */}
-                    {players.length > 0 && currentTurnPlayerId !== undefined && (
+                    {playersArray.length > 0 && currentTurnPlayerId !== undefined && (
                         <div>
                             {/* Architectural Fix: Pass the server-determined currentTurnPlayerId */}
-                            <PlayerPanel players={players} currentPlayerId={currentTurnPlayerId} />
+                            <PlayerPanel players={playersArray} currentPlayerId={currentTurnPlayerId} />
                         </div>)
                     }
                     {/* Center - Game Board */}
                     <div className="flex flex-col items-center gap-6">
-                        <GameBoard players={players} />
+                        <GameBoard players={playersArray} />
                     </div>
-
+                    {/* Auction Modal */}
+                    {isAuctionPhase && auction && localPlayer && (
+                        <AuctionModel
+                            property={auction.auctionProperty}
+                            highestBid={auction.highest_bid || 0}
+                            highestBidderName={highestBidder?.name || "None"}
+                            isMyTurnToBid={auction?.turn_index === localPlayerId || false}
+                            onBid={handleBid}
+                            onFold={handleFold}
+                            playerMoney={localPlayer.money}
+                        />
+                    )}
                     {/* Right panel - Controls */}
                     <div className="w-64 space-y-4">
                         <div className="bg-card border-2 border-border rounded-lg p-6">

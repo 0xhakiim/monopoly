@@ -1,18 +1,18 @@
 import json
 import re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from typing import List, Optional
+from typing import Dict, List, Optional
 from app.models.Game import Game
 from app.models.gamesManager import gamesManager
 from app.api.security import get_current_user_http, get_current_user_ws
 
 router = APIRouter()
-queue = []
-connections = {}
+queue: List[int] = []
+connections: Dict[int, WebSocket] = {}
 
 
 @router.websocket("/ws/matchmaking")
-async def join_queue(ws: WebSocket, player_id: int = Depends(get_current_user_ws)):
+async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws)):
     await ws.accept()
     try:
         while True:
@@ -20,30 +20,28 @@ async def join_queue(ws: WebSocket, player_id: int = Depends(get_current_user_ws
             if data.get("action") == "join":
                 print(data)
 
-                if player_id not in connections:
-                    queue.append(player_id)
-                    connections[player_id] = ws
+                if user_id not in connections:
+                    queue.append(user_id)
+                    connections[user_id] = ws
                     await ws.send_json(
-                        {"message": f"Player {player_id} joined the queue"}
+                        {"message": f"Player {user_id} joined the queue"}
                     )
                 else:
                     await ws.send_json(
-                        {"error": f"Player {player_id} is already in the queue"}
+                        {"error": f"Player {user_id} is already in the queue"}
                     )
             elif data.get("action") == "leave":
-                if player_id in queue:
-                    queue.remove(player_id)
-                    await ws.send_json(
-                        {"message": f"Player {player_id} left the queue"}
-                    )
+                if user_id in queue:
+                    queue.remove(user_id)
+                    await ws.send_json({"message": f"Player {user_id} left the queue"})
                 else:
                     await ws.send_json(
-                        {"error": f"Player {player_id} is not in the queue"}
+                        {"error": f"Player {user_id} is not in the queue"}
                     )
             else:
                 await ws.send_json(
                     {
-                        "error": "Invalid command. Use 'join:<player_id>' or 'leave:<player_id>'"
+                        "error": "Invalid command. Use 'join:<user_id>' or 'leave:<user_id>'"
                     }
                 )
 
@@ -85,6 +83,6 @@ async def join_queue(ws: WebSocket, player_id: int = Depends(get_current_user_ws
                     )
                     return 0
     except WebSocketDisconnect:
-        if player_id in queue:
-            queue.remove(player_id)
-            connections.pop(player_id, None)
+        if user_id in queue:
+            queue.remove(user_id)
+            connections.pop(user_id, None)
