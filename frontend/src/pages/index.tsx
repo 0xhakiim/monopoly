@@ -5,6 +5,7 @@ import { PlayerPanel } from '@/components/PlayerPanel';
 import { Button } from '@/components/ui/button';
 import type { Player, SquareTile, auctionState } from '@/types/monopoly';
 import { toast } from 'sonner';
+import JailDecisionModal from '@/components/JailDecisionModel';
 
 import { useGameSocket } from "@/hooks/use-gameSocket";
 import AuctionModel from '@/components/Auction';
@@ -96,7 +97,7 @@ const Index = () => {
     const isDecideToBuyPhase = (((gameState?.phase ?? "") == "DECIDE_TO_BUY") && (currentTurnPlayerId === localPlayerId));
     console.log("local player id:", localPlayerId);
     console.log("current turn player id:", currentTurnPlayerId);
-
+    const message = lastRawMessage?.message || "";
     //const [cachedLocalPlayer, setCachedLocalPlayer] = useState<Player | null>(localPlayer ?? null);
 
     const [cachedLocalPlayer, setCachedLocalPlayer] = useState<Player | null>(null);
@@ -199,6 +200,17 @@ const Index = () => {
         });
         toast.info("Property passed to auction.");
     };
+    const handleJailPay = async () => {
+        await sendAction({ action: "jail_action", payload: { action: "PAY" } })
+    }
+
+    const handleJailRoll = async () => {
+        await sendAction({ action: "jail_action", payload: { action: "ROLL" } })
+    }
+
+    const handleJailCard = async () => {
+        await sendAction({ action: "jail_action", payload: { action: "CARD" } })
+    }
     const endTurn = async () => {
         // Only allow ending turn if it's the local player's turn AND they have rolled
         if (isLocalPlayersTurn && lastDice[0] > 0) {
@@ -225,7 +237,7 @@ const Index = () => {
     window.isDecideToBuyPhase = isDecideToBuyPhase; // For debugging
     return (
         <div className="min-h-screen bg-background p-8">
-
+            <div className="mb-4 text-sm text-muted-foreground">{message}</div>
             <Button
                 onClick={handleResetGame}
                 variant="destructive"
@@ -245,6 +257,18 @@ const Index = () => {
                                 isAffordable={isAffordable}
                             />
                         )}
+                    {
+                        gameState?.phase === "JAIL_DECISION" &&
+                        isLocalPlayersTurn &&
+                        localPlayer?.in_jail && (
+                            <JailDecisionModal
+                                canUseCard={(localPlayer.get_out_of_jail_free ?? 0) > 0}
+                                onPay={handleJailPay}
+                                onRoll={handleJailRoll}
+                                onUseCard={handleJailCard}
+                            />
+                        )
+                    }
                     {/* Left panel - Players */}
                     {playersArray.length > 0 && currentTurnPlayerId !== undefined && (
                         <div>

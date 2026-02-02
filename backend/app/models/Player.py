@@ -7,6 +7,9 @@ class Player(BaseModel):
     Represents the mutable state of a single player in the Monopoly game.
     """
 
+    def __init__(self, **data):
+        super().__init__(**data)
+
     user_id: Optional[int] = Field(
         None, description="The user ID associated with this player."
     )

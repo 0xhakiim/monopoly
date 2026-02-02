@@ -37,6 +37,8 @@ export interface Player {
     position: number;
     color: string;
     properties: number[];
+    in_jail: boolean;
+    get_out_of_jail_free: number;
 }
 
 

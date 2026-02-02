@@ -37,7 +37,7 @@ async def get_current_user_ws(websocket: WebSocket, token: str = Query(...)):
         user_id: int = payload.get("user_id")
         if user_id is None:
             raise Exception("Token payload missing user_id")
-        return user_id  # Returns the authenticated player's ID
+        return user_id  # Returns the authenticated user's ID
     except Exception:
         # 2. If validation fails, close the socket immediately BEFORE accepting
         await websocket.close(

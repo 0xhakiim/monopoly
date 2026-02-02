@@ -7,6 +7,7 @@ from fastapi import (
 )
 from typing import List, Dict
 from app.game.schemas import WSMessage
+from app.models.Player import Player
 from app.models.board import Square, get_board
 from app.models.Game import Game
 from app.models.gamesManager import gamesManager, getsManager
@@ -40,19 +41,9 @@ async def game_endpoint(
     )
 
     # Helper function to get the current snapshot of the game
-    def get_game_snapshot(event_type: str, extra_data: dict = None):
+    def get_game_snapshot(event_type: str, extra_data: dict = {}) -> dict:
         players_list = list(game.get_players().values())
         print(players_list)
-        type = ""
-        if event_type in (
-            "game_start",
-            "reset_game",
-            "game_update",
-            "property_bought",
-            "auction_started",
-            "end_turn",
-        ):
-            type = "game_state"
         snapshot = {
             "type": event_type,
             "state": {
@@ -76,6 +67,9 @@ async def game_endpoint(
             data_raw = await ws.receive_json()
             data = WSMessage(**data_raw)
             current_player = game.players_map.get(player_id)
+            if not current_player:
+                await ws.send_json({"type": "error", "message": "Player not in game!"})
+                continue
 
             # 1. Validation: Is it the player's turn?
             # (Only validate for actions that require a turn)
@@ -123,7 +117,16 @@ async def game_endpoint(
                 print("Passing on buying property: ", game.state["turn_index"])
                 game.state["phase"] = "AUCTION_PROPERTY"
                 await game.start_auction(current_player.position, player_id)
-
+            elif data.action == "jail_action":
+                action_type = data.payload.get("action", "")
+                print(f"Player {player_id} performing jail action: {action_type}")
+                await game.jail_decision(player_id, action_type)
+                await game.broadcast(get_game_snapshot("game_update"))
+            elif data.action == "build_house":
+                property_id = data.payload.get("property_id", -1)
+                print(f"Player {player_id} building on property: {property_id}")
+                await game.build_house(player_id, property_id)
+                await game.broadcast(get_game_snapshot("house_built"))
             if game.state["phase"] == "AUCTION":
                 if data.action == "place_bid":
                     print("bidding !!!!!!!!!!!", game.state)
