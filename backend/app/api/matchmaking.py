@@ -1,10 +1,12 @@
 import json
+from operator import ge
 import re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from typing import Dict, List, Optional
 from app.models.Game import Game
-from app.models.gamesManager import gamesManager
+from app.models.gamesManager import gamesManager, getsManager
 from app.api.security import get_current_user_http, get_current_user_ws
+from app.models.RedisGameStore import RedisGameStore
 
 router = APIRouter()
 queue: List[int] = []
@@ -55,8 +57,9 @@ async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws))
                 await connections[player2].send_json(
                     {"message": f"Game created with players {player1} and {player2}."}
                 )
-                game_manager = gamesManager()
+                game_manager = getsManager()
                 game: Game = game_manager.create_game([player1, player2])
+
                 if game:
                     print(game.get_players().items())
                     await connections[player1].send_json(
@@ -73,6 +76,7 @@ async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws))
                             "players": list(game.get_players().items()),
                         }
                     )
+                    game_manager.save_game_to_redis(game)
                     return game.id
                 else:
                     await connections[player1].send_json(

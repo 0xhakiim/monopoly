@@ -47,6 +47,7 @@ export interface PropertyDetails {
     rent: number[]; // Added based on user's example
     house_cost: number; // Added based on user's example
     group_id: string; // Added based on user's example
+    color?: string; // Added based on user's example
 }
 
 export interface SquareTile {
@@ -55,6 +56,9 @@ export interface SquareTile {
     type: string;
     details?: PropertyDetails; // Price lives here for purchasable tiles
     tax_amount?: number;
+    owner_id?: number | null;
+    houses?: number;
+    can_build?: boolean; // Indicates if the player can build on this property
 }
 type IncomingPlayerTuple = [number, Player];
 type IncomingData = IncomingPlayerTuple[];
@@ -77,4 +81,12 @@ export interface auctionState {
     highest_bidder: Player | null;
     active_players: number[]; // IDs of players still in the auction
     turn_index: number;
+}
+export interface Mutable_property {
+    id?: number;
+    owner_id: number | null;
+    houses: number;
+    mortgaged: boolean;
+    details?: PropertyDetails;
+    name: string;
 }

@@ -3,7 +3,12 @@ from pydantic import BaseModel, Field, field_validator, ValidationInfo
 import json
 from pathlib import Path
 
+
 # --- 1. Pydantic Models for State ---
+class BuildInfo(BaseModel):
+    can_build: bool
+    house_cost: Optional[int] = None
+    houses: int
 
 
 # Defines the specific data for property squares (non-Go, non-Tax, non-Chance/CC)

@@ -1,4 +1,5 @@
 from dis import Positions
+from annotated_types import T
 from fastapi import (
     APIRouter,
     WebSocket,
@@ -9,7 +10,7 @@ from typing import List, Dict
 from app.game.schemas import WSMessage
 from app.models.Player import Player
 from app.models.board import Square, get_board
-from app.models.Game import Game
+from app.models.Game import Game, Turn
 from app.models.gamesManager import gamesManager, getsManager
 from app.api.security import get_current_user_ws
 
@@ -70,7 +71,11 @@ async def game_endpoint(
             if not current_player:
                 await ws.send_json({"type": "error", "message": "Player not in game!"})
                 continue
-
+            if data.action == "mortgage_property":
+                square_id = data.payload.get("square_id")
+                await game.mortgage_property(player_id, square_id)
+                await game.broadcast(get_game_snapshot("property_mortgaged"))
+                continue
             # 1. Validation: Is it the player's turn?
             # (Only validate for actions that require a turn)
             is_turn = game.state["turn_index"] == current_player.id
@@ -123,7 +128,7 @@ async def game_endpoint(
                 await game.jail_decision(player_id, action_type)
                 await game.broadcast(get_game_snapshot("game_update"))
             elif data.action == "build_house":
-                property_id = data.payload.get("property_id", -1)
+                property_id = data.payload.get("square_id", -1)
                 print(f"Player {player_id} building on property: {property_id}")
                 await game.build_house(player_id, property_id)
                 await game.broadcast(get_game_snapshot("house_built"))
@@ -145,6 +150,7 @@ async def game_endpoint(
                     await game.broadcast(get_game_snapshot("end_turn"))
                 else:
                     game.state["phase"] = "WAIT_FOR_ROLL"
+
                     await game.broadcast(get_game_snapshot("roll_dice"))
     except WebSocketDisconnect:
         print(f"Player {player_id} disconnected from {uuid}")

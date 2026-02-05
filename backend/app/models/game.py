@@ -1,9 +1,10 @@
 import asyncio
 import random
+import re
 from turtle import position
 from typing import List, Dict, Any
 from pydantic import TypeAdapter
-from sqlalchemy import true
+from sqlalchemy import UUID, true
 from app.models.Player import Player
 from app.models.board import get_board, Square
 
@@ -44,29 +45,44 @@ COMMUNITY_CHEST_CARDS: List[Dict[str, Any]] = [
 
 
 class Game:
-    def __init__(self, id, player_ids: List[int]):
-        self.id = id
-        self.turn_order: List[int] = [i for i in range(len(player_ids))]
-        self.turn: Turn = Turn(self.turn_order[0])
-        # 2. Player Map: Dict of ID -> Player object for fast state lookup
-        self.players_map: Dict[int, Player] = {
-            p_id: Player(id=i, user_id=p_id) for i, p_id in enumerate(player_ids)
-        }
-        self.players = {i: p_id for i, p_id in enumerate(player_ids)}
-        # Game-wide state
-        self.state: Dict[str, Any] = {
-            "turn_index": 0,  # Index into self.turn_order
-            "mutable_properties": self._initialize_mutable_properties(),  # Tracks ownership, houses, mortgage
-            "phase": "WAIT_FOR_ROLL",  # e.g., WAIT_FOR_ROLL, DECIDE_TO_BUY, PAY_RENT
-            "auction": None,  # Details of ongoing auction if any
-        }
-        self.chance_deck = CHANCE_CARDS.copy()
-        self.community_deck = COMMUNITY_CHEST_CARDS.copy()
-        random.shuffle(self.chance_deck)
-        random.shuffle(self.community_deck)
 
-        self.connections: Dict[int, Any] = {}
-        print(f"Game created with ID: {self.id} and players: {self.players_map}")
+    def __init__(self, game_id: UUID, players: List[Player]):
+        self.id = game_id
+        self.players_map = {p.user_id: p for p in players}
+        self.players = {p.id: p.user_id for p in players}
+        self.connections = {}
+        self.state = {
+            "phase": "WAIT_FOR_ROLL",
+            "turn_index": 0,
+            "mutable_properties": self._initialize_mutable_properties(),
+            "auction": None,
+        }
+        self.turn_order = [p.id for p in players]
+        self.turn = Turn(self.turn_order[0])
+
+    @classmethod
+    def from_matchmaking(cls, game_id: UUID, player_ids: List[int]):
+        """Factory: Starts with just IDs from matchmaking."""
+        # Convert IDs to full Player objects with default start money
+        new_players = [
+            Player(user_id=pid, id=i, name=f"Player {pid}")
+            for i, pid in enumerate(player_ids)
+        ]
+
+        return cls(game_id, new_players)
+
+    @classmethod
+    def from_redis(cls, game_id: UUID, data: dict):
+        """Factory: Rebuilds from a Redis JSON dictionary."""
+        # Reconstruct Player objects from stored dicts
+        restored_players = [Player(**p_dict) for p_dict in data["players_list"]]
+
+        instance = cls(game_id, restored_players)
+        instance.state = data["state"]
+        instance.turn_order = data["turn_order"]
+        instance.turn = Turn(**data["turn"])
+
+        return instance
 
     async def start_auction(self, id: int, playerId: int):
 
@@ -137,7 +153,7 @@ class Game:
         await self.broadcast(
             {
                 "type": "AUCTION_FINISHED",
-                "state": {**self.state, "players": list(self.get_players().items())},
+                "state": {**self.state, "players": list(self.get_players().values())},
                 "extra": {
                     "winner": self.players_map[winner].id if winner else None,
                     "price": price,
@@ -247,7 +263,7 @@ class Game:
             return
 
         # 3. Square is OWNED by another player (PAY RENT)
-        owner = self.players_map.get(owner_id)
+        owner = self.players_map.get(self.players.get(owner_id))
         if not owner:
             print(f"Error: Owner with ID {owner_id} not found.")
             self.state["phase"] = "WAIT_FOR_NEXT_TURN"
@@ -259,12 +275,11 @@ class Game:
 
             if rent > 0:
                 if player.money < rent:
-                    print(
-                        f"Player {player.id} cannot afford rent of ${rent} to Player {owner.id}"
+                    await self.handle_insufficient_funds(
+                        debtor_id=player.user_id,
+                        creditor_id=owner.id,
+                        amount_due=rent,
                     )
-                    # In a full implementation, trigger bankruptcy or asset liquidation here
-                    # For now, we'll just set player's money to 0
-                    player.money = 0
                     return
                 # Transfer money
                 player.money -= rent
@@ -419,8 +434,8 @@ class Game:
             return
 
         mutable_state = self.state["mutable_properties"].get(square_id)
-        if not mutable_state or mutable_state["owner_id"] != player_id:
-            print(f"Error: Property {square_id} is not owned by Player {player_id}.")
+        if not mutable_state or mutable_state["owner_id"] != player.id:
+            print(f"Error: Property {square_id} is not owned by Player {player.id}.")
             return
 
         if mutable_state["is_mortgaged"]:
@@ -433,12 +448,12 @@ class Game:
         await self.broadcast(
             {
                 "type": "PROPERTY_MORTGAGED",
-                "player_id": player_id,
+                "player_id": player.id,
                 "square_id": square_id,
                 "amount": mortgage_value,
             }
         )
-        print(f"Player {player_id} mortgaged {square.name} for ${mortgage_value}.")
+        print(f"Player {player.id} mortgaged {square.name} for ${mortgage_value}.")
 
     async def unmortgage_property(self, player_id: int, square_id: int):
         player = self.players_map.get(player_id)
@@ -452,8 +467,8 @@ class Game:
             return
 
         mutable_state = self.state["mutable_properties"].get(square_id)
-        if not mutable_state or mutable_state["owner_id"] != player_id:
-            print(f"Error: Property {square_id} is not owned by Player {player_id}.")
+        if not mutable_state or mutable_state["owner_id"] != player.id:
+            print(f"Error: Property {square_id} is not owned by Player {player.id}.")
             return
 
         if not mutable_state["is_mortgaged"]:
@@ -464,7 +479,7 @@ class Game:
             int((square.details.price // 2) * 1.1) if square.details else 0
         )
         if player.money < unmortgage_cost:
-            print(f"Error: Player {player_id} cannot afford to unmortgage {square_id}.")
+            print(f"Error: Player {player.id} cannot afford to unmortgage {square_id}.")
             return
 
         player.money -= unmortgage_cost
@@ -472,12 +487,12 @@ class Game:
         await self.broadcast(
             {
                 "type": "PROPERTY_UNMORTGAGED",
-                "player_id": player_id,
+                "player_id": player.id,
                 "square_id": square_id,
                 "amount": unmortgage_cost,
             }
         )
-        print(f"Player {player_id} unmortgaged {square.name} for ${unmortgage_cost}.")
+        print(f"Player {player.id} unmortgaged {square.name} for ${unmortgage_cost}.")
 
     async def build_house(self, player_id: int, square_id: int):
         player = self.players_map.get(player_id)
@@ -491,8 +506,8 @@ class Game:
             return
 
         mutable_state = self.state["mutable_properties"].get(square_id)
-        if not mutable_state or mutable_state["owner_id"] != player_id:
-            print(f"Error: Property {square_id} is not owned by Player {player_id}.")
+        if not mutable_state or mutable_state["owner_id"] != player.id:
+            print(f"Error: Property {square_id} is not owned by Player {player.id}.")
             return
 
         details = square.details
@@ -502,10 +517,9 @@ class Game:
 
         # Check for monopoly
         if not self._check_monopoly(player_id, details.group_id):
-            print(f"Error: Player {player_id} does not have a monopoly on this group.")
+            print(f"Error: Player {player.id} does not have a monopoly on this group.")
             return
 
-        # Check house building rules (even building)
         group_properties = [
             sid
             for sid, s in STATIC_BOARD_TILES.items()
@@ -520,7 +534,6 @@ class Game:
             )
             return
 
-        # Check if max houses reached
         if mutable_state["houses"] >= 5:
             print(f"Error: Maximum houses/hotel already built on property {square_id}.")
             return
@@ -552,49 +565,25 @@ class Game:
     ):
         player = self.players_map[debtor_id]
 
-        if player.money >= amount_due:
-            return False
-
-        if self._player_has_houses(debtor_id):
+        if self._player_has_houses(player.id):
             self.state["phase"] = "FORCED_SELL_HOUSES"
             self.state["debt"] = {
-                "debtor": debtor_id,
+                "debtor": player.id,
                 "creditor": creditor_id,
                 "amount": amount_due,
             }
-            return True
-
-        if self._player_has_unmortgaged_property(debtor_id):
-            self.state["phase"] = "FORCED_MORTGAGE"
-            self.state["debt"] = {
-                "debtor": debtor_id,
-                "creditor": creditor_id,
-                "amount": amount_due,
-            }
-            return True
-
-        await self._declare_bankruptcy(debtor_id, creditor_id)
-        return True
-
-    async def forced_mortgage(self, player_id: int, square_id: int):
-        square = STATIC_BOARD_TILES[square_id]
-        state = self.state["mutable_properties"][square_id]
-
-        if state["is_mortgaged"]:
             return
 
-        value = square.details.price // 2
-        state["is_mortgaged"] = True
-        self.players_map[player_id].money += value
-
-        await self.broadcast(
-            {
-                "type": "PROPERTY_MORTGAGED",
-                "player_id": player_id,
-                "square_id": square_id,
-                "amount": value,
+        if self._player_has_unmortgaged_property(player.id):
+            self.state["phase"] = "FORCED_MORTGAGE"
+            self.state["debt"] = {
+                "debtor": player.id,
+                "creditor": creditor_id,
+                "amount": amount_due,
             }
-        )
+            return
+
+        await self._declare_bankruptcy(debtor_id, creditor_id)
 
     def _owned_by(self, owner_id: int, square_type: str) -> int:
         return sum(
@@ -610,7 +599,7 @@ class Game:
         mutable_state: Dict[str, Any],
         dice: tuple[int, int],
     ) -> int:
-        """Calculates the rent for a property based on its state and type."""
+        # rent is decided by square type and state
         details = square.details
         if not details:
             return 0
@@ -666,12 +655,13 @@ class Game:
         await self._execute_card(card, player, (0, 0))
 
     async def forced_sell_house(self, player_id: int, group_id: str):
+        player = self.players_map[player_id]
         props = [
             sid
             for sid, s in STATIC_BOARD_TILES.items()
             if s.details
             and s.details.group_id == group_id
-            and self.state["mutable_properties"][sid]["owner_id"] == player_id
+            and self.state["mutable_properties"][sid]["owner_id"] == player.id
         ]
 
         if not props:
@@ -692,12 +682,12 @@ class Game:
         refund = details.house_cost // 2
 
         self.state["mutable_properties"][sid]["houses"] -= 1
-        self.players_map[player_id].money += refund
+        player.money += refund
 
         await self.broadcast(
             {
                 "type": "HOUSE_SOLD",
-                "player_id": player_id,
+                "player_id": player.id,
                 "square_id": sid,
                 "refund": refund,
             }
@@ -722,7 +712,7 @@ class Game:
         await self.broadcast(
             {
                 "type": "PLAYER_BANKRUPT",
-                "player_id": debtor_id,
+                "player_id": debtor.id,
                 "creditor": creditor_id,
             }
         )
@@ -737,6 +727,7 @@ class Game:
         )
 
     def _player_has_unmortgaged_property(self, player_id: int) -> bool:
+
         return any(
             s["owner_id"] == player_id and not s["is_mortgaged"]
             for s in self.state["mutable_properties"].values()
@@ -772,8 +763,6 @@ class Game:
         if not square or square.type not in ["Property", "Railroad", "Utility"]:
             print(f"Error: Square {square_id} is not a purchasable property.")
             return
-
-        # Check if the square is actually for sale (unowned)
         mutable_state = self.state["mutable_properties"].get(square_id)
         if not mutable_state or mutable_state["owner_id"] is not None:
             print(f"Error: Property {square_id} is already owned.")
@@ -781,13 +770,11 @@ class Game:
 
         price = square.details.price if square.details else 0
 
-        # 1. Check if the player can afford it
         if player.money < price:
             print(
                 f"Player {player_id} cannot afford property {square_id} (Cost: {price}, Money: {player.money})"
             )
-            # In a real game, this should trigger a "DECIDE_TO_MORTGAGE" phase or similar
-            # For now, we'll just skip the purchase.
+
             if len(player.properties) == 0:
                 self.state["phase"] = "DECIDE_TO_MORTGAGE"
 
@@ -803,16 +790,16 @@ class Game:
         # 2. Execute the purchase
         player.money -= price
         player.properties.append(square_id)
-        mutable_state["owner_id"] = player_id
+        mutable_state["owner_id"] = player.id
         await self.broadcast(
             {
                 "type": "PROPERTY_BOUGHT",
-                "buyer": player_id,
+                "buyer": player.id,
                 "price": price,
                 "square_id": square_id,
             }
         )
-        print(f"Player {player_id} bought {square.name} for ${price}.")
+        print(f"Player {player.id} bought {square.name} for ${price}.")
 
         # 3. Advance game state phase
         self.state["phase"] = "WAIT_FOR_NEXT_TURN"
@@ -830,6 +817,7 @@ class Game:
                 return
             player.get_out_of_jail_free -= 1
             player.in_jail = False
+            self.state["phase"] = "WAIT_FOR_NEXT_TURN"
 
         elif action == "ROLL":
             dice = (random.randint(1, 6), random.randint(1, 6))
@@ -837,17 +825,21 @@ class Game:
             if dice[0] == dice[1]:
                 player.in_jail = False
                 player.jail_turns = 0
+                await self.handle_position(player_id, dice)
+                return
             else:
                 player.jail_turns += 1
                 if player.jail_turns >= 3:
                     player.money -= 50
                     player.in_jail = False
                     player.jail_turns = 0
+                    self.state["phase"] = "WAIT_FOR_NEXT_TURN"
+                    return
         self.state["phase"] = "WAIT_FOR_NEXT_TURN"
         await self.broadcast(
             {
                 "type": "WAIT_FOR_NEXT_TURN",
-                "state": self.state,
+                "state": {**self.state},
             }
         )
 

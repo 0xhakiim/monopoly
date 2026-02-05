@@ -3,12 +3,15 @@ import { GameBoard } from '@/components/GameBoard';
 import { DiceRoller } from '@/components/DiceRoller';
 import { PlayerPanel } from '@/components/PlayerPanel';
 import { Button } from '@/components/ui/button';
-import type { Player, SquareTile, auctionState } from '@/types/monopoly';
+import type { Mutable_property, Player, SquareTile, auctionState } from '@/types/monopoly';
 import { toast } from 'sonner';
 import JailDecisionModal from '@/components/JailDecisionModel';
 
 import { useGameSocket } from "@/hooks/use-gameSocket";
 import AuctionModel from '@/components/Auction';
+import BuildHouseModal from '@/components/BuildHouseModal';
+import DevPanel from '@/components/DevPanel';
+import { boardSpaces } from '@/data/boardSpaces';
 
 
 
@@ -190,6 +193,7 @@ const Index = () => {
             payload: { square_id: propertyForSale.id }
         });
     };
+    const [showdevpanel, setShowDevPanel] = useState(false);
     const handlePassOnBuy = async () => {
         if (!isLocalPlayersTurn || !propertyForSale) return;
 
@@ -211,6 +215,14 @@ const Index = () => {
     const handleJailCard = async () => {
         await sendAction({ action: "jail_action", payload: { action: "CARD" } })
     }
+    const handleBuildHouse = async (squareId: number) => {
+        await sendAction({
+            action: "build_house",
+            payload: { square_id: squareId }
+        });
+        setShowBuildModal(false);
+        console.log("Building house on square ID:", squareId);
+    };
     const endTurn = async () => {
         // Only allow ending turn if it's the local player's turn AND they have rolled
         if (isLocalPlayersTurn && lastDice[0] > 0) {
@@ -225,7 +237,26 @@ const Index = () => {
     const handleResetGame = async () => {
         await sendAction({ action: "reset_game" });
     };
+    const [showBuildModal, setShowBuildModal] = useState(false);
+    const buildableProperties = Object.fromEntries(
+        Object.entries(gameState?.mutable_properties ?? {})
+            .filter(([_, sq]) =>
+                sq.owner_id === localPlayerId &&
+                sq.houses < 4 &&
+                !sq.mortgaged
+            )
+            .map(([id, sq]) => [Number(id), sq]) as [number, Mutable_property][]
+    );
+
+    const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
+
+    // Find the full property object from the ID
+    const selectedProperty = boardSpaces.find(s => s.id === selectedPropertyId);
+
+    // Check if the local player owns this property
+    const isOwner = gameState?.players[localPlayerId]?.properties.includes(selectedPropertyId);
     window.document.title = `Monopoly Game ${localGameId || ""} - Player ${localPlayer?.name || ""}`;
+    window.properties = buildableProperties; // For debugging
     window.auction = auction; // For debugging
     window.gameState = gameState; // For debugging
     window.players = players; // For debugging
@@ -243,6 +274,19 @@ const Index = () => {
                 variant="destructive"
                 className="mb-4"
             >   reset game</Button>
+            <Button
+                onClick={() => setShowBuildModal(true)}
+                disabled={!isLocalPlayersTurn || buildableProperties.length === 0}
+                className="w-full"
+            >
+                Build House
+            </Button>
+            <Button
+                onClick={() => setShowDevPanel(true)}
+                className="w-full"
+            >
+                Open Dev Panel
+            </Button>
             <div className="max-w-[1400px] mx-auto">
                 <div className="flex gap-8 items-start justify-center">
 
@@ -257,6 +301,25 @@ const Index = () => {
                                 isAffordable={isAffordable}
                             />
                         )}
+                    {showdevpanel && (
+                        <DevPanel
+                            gameId={localGameId ?? ""}
+                            players={gameState.players}
+                            currentPhase={gameState.phase}
+                        />
+                    )}
+                    {showBuildModal && (
+                        <BuildHouseModal
+                            properties={
+                                Object.entries(buildableProperties).map(
+                                    ([id, sq]) => ({ id: Number(id), ...sq })
+                                )
+                            }
+                            onBuild={handleBuildHouse}
+                            onClose={() => setShowBuildModal(false)}
+                        />
+                    )}
+
                     {
                         gameState?.phase === "JAIL_DECISION" &&
                         isLocalPlayersTurn &&
@@ -278,7 +341,50 @@ const Index = () => {
                     }
                     {/* Center - Game Board */}
                     <div className="flex flex-col items-center gap-6">
-                        <GameBoard players={playersArray} />
+                        <GameBoard players={playersArray} onSelectSpace={(id) => setSelectedPropertyId(id)} />
+                    </div>
+                    <div className="w-80 flex flex-col gap-4">
+                        {/* Property Management Panel */}
+                        {selectedProperty && (
+                            <div className="bg-card border-2 border-border rounded-lg p-4 shadow-lg">
+                                <h3 className="text-xl font-bold border-b pb-2 mb-2">{selectedProperty.name}</h3>
+
+                                {isOwner ? (
+                                    <div className="space-y-3">
+                                        <p className="text-sm text-green-600 font-semibold">You own this property</p>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Button
+                                                variant="outline"
+                                                className="text-xs"
+                                                onClick={() => sendAction('MORTGAGE', { propertyId: selectedPropertyId })}
+                                            >
+                                                Mortgage
+                                            </Button>
+                                            <Button
+                                                variant="destructive"
+                                                className="text-xs"
+                                                disabled={!selectedProperty.details?.houses}
+                                                onClick={() => sendAction('SELL_HOUSE', { propertyId: selectedPropertyId })}
+                                            >
+                                                Sell House
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm italic text-muted-foreground">
+                                        {selectedProperty.details?.price ? `Price: $${selectedProperty.details.price}` : "Cannot be purchased"}
+                                    </p>
+                                )}
+                                <Button
+                                    variant="ghost"
+                                    className="w-full mt-4 text-xs"
+                                    onClick={() => setSelectedPropertyId(null)}
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        )}
                     </div>
                     {/* Auction Modal */}
                     {isAuctionPhase && auction && localPlayer && (

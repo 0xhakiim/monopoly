@@ -7,75 +7,63 @@ import { useState, useEffect, useMemo } from 'react';
 
 interface GameBoardProps {
     players: Player[];
+    onSelectSpace: (spaceId: number) => void;
 }
-export const GameBoard = ({ players = [] }: GameBoardProps) => {
-    const getIconForType = (space: typeof boardSpaces[0]) => {
-        switch (space.type) {
-            case 'railroad':
-                return '🚂';
-            case 'utility':
-                return space.name.includes('Electric') ? '💡' : '💧';
-            case 'chance':
-                return '❓';
-            case 'community':
-                return '👥';
-            case 'tax':
-                return '💸';
-            default:
-                return '';
-        }
-    };
-    let positions = [];
-    for (let i of players) {
-        positions.push(i.position);
+export const GameBoard = ({ players = [], onSelectSpace }: GameBoardProps) => {
+    // Map property IDs to owner colors for quick lookup
+    const propertyOwners = useMemo(() => {
+        const owners: Record<number, string> = {};
+        players.forEach(p => {
+            p.properties.forEach(propId => {
+                owners[propId] = p.color;
+            });
+        });
+        return owners;
+    }, [players]);
+    const renderSpace = (space: any, position: any) => (
+        <BoardSpace
+            key={space.id}
+            space={space}
+            players={getPlayersAtPosition(space.id)}
+            position={position}
+            ownerColor={propertyOwners[space.id]} // Pass owner color
+            onClick={() => onSelectSpace(space.id)} // Pass click handler
+        />
+    );
+    // Group the spaces
+    const bottomRow = boardSpaces.slice(0, 11).reverse(); // 10 to 0
+    const leftColumn = boardSpaces.slice(11, 20).reverse(); // 19 to 11
+    const topRow = boardSpaces.slice(20, 31); // 20 to 30
+    const rightColumn = boardSpaces.slice(31, 40); // 31 to 39
+    function getPlayersAtPosition(position: number) {
+        return players.filter(player => player.position === position).map(p => ({ id: p.id, color: p.color }));
     }
-    const bottomRow = boardSpaces.slice(0, 11);
-    const leftColumn = boardSpaces.slice(11, 20);
-    const topRow = boardSpaces.slice(20, 31).reverse();
-    const rightColumn = boardSpaces.slice(31, 40).reverse();
-
-
-
-
-
-    const getPlayersAtPosition = (pos: number) => {
-        // If backend provides a GameState, try to use it.
-        if (positions) {
-            const idsAtPos = Object.entries(positions)
-                .filter(([, p]) => p === pos)
-                .map(([pid]) => Number(pid));
-            return players.filter((p) => idsAtPos.includes(p.id));
-        }
-        // fallback: local players prop
-        return players.filter((p) => p.position === pos);
-    };
     return (
-        <div className="relative w-[800px] h-[800px] bg-game-board border-8 border-game-boardBorder shadow-2xl">
+        <div className="relative w-[800px] h-[800px] bg-[#bfdbfe] border-2 border-black grid grid-cols-[repeat(11,1fr)] grid-rows-[repeat(11,1fr)]">
 
-
-            {/* Board layout (existing rendering) */}
-            <div className="absolute bottom-0 left-0 right-0 flex">
-                {bottomRow.map((space) => (console.log(space),
-                    <BoardSpace key={space.id} space={space} players={getPlayersAtPosition(space.id)} position="bottom" />
-                ))}
+            {/* CENTER SPACE (Logo/Cards) */}
+            <div className="col-start-2 col-end-11 row-start-2 row-end-11 flex items-center justify-center bg-[#000000] border-2 border-black relative">
+                <h1 className="text-6xl font-black rotate-[-45deg] opacity-20">MONOPOLY</h1>
             </div>
 
-            <div className="absolute left-0 top-24 bottom-24 flex flex-col">
-                {leftColumn.map((space) => (
-                    <BoardSpace key={space.id} space={space} players={getPlayersAtPosition(space.id)} position="left" />
-                ))}
+            {/* TOP ROW (20-30) */}
+            <div className="col-start-1 col-end-12 row-start-1 flex text-black">
+                {topRow.map((space) => renderSpace(space, "top"))}
             </div>
 
-            <div className="absolute top-0 left-0 right-0 flex">
-                {topRow.map((space) => (
-                    <BoardSpace key={space.id} space={space} players={getPlayersAtPosition(space.id)} position="top" />
-                ))}
+            {/* BOTTOM ROW (10-0) */}
+            <div className="col-start-1 col-end-12 row-start-11 flex flex-row-reverse text-black">
+                {bottomRow.map((space) => renderSpace(space, "bottom"))}
             </div>
 
-            <div className="absolute right-0 top-24 bottom-24 flex flex-col">
-                {rightColumn.map((space) => (
-                    <BoardSpace key={space.id} space={space} players={getPlayersAtPosition(space.id)} position="right" />
-                ))}
+            {/* LEFT COLUMN (11-19) */}
+            <div className="col-start-1 row-start-2 row-end-11 flex flex-col-reverse text-black">
+                {leftColumn.map((space) => renderSpace(space, "left"))}
+            </div>
+
+            {/* RIGHT COLUMN (31-39) */}
+            <div className="col-start-11 row-start-2 row-end-11 flex flex-col text-black">
+                {rightColumn.map((space) => renderSpace(space, "right"))}
             </div>
         </div>
     );
