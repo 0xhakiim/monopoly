@@ -10,7 +10,7 @@ type UseGameSocketReturn = {
     connected: boolean;
     sendAction: (message: WSMessage) => void;
     lastRawMessage: any | null;
-    gameState: any | null;
+    gameState: GameState | null;
 };
 
 const defaultBase = (import.meta.env.DEV ? "ws://localhost:8000" : (window.location.origin.startsWith("https") ? "wss://" : "ws://") + window.location.host);
@@ -24,7 +24,7 @@ const defaultBase = (import.meta.env.DEV ? "ws://localhost:8000" : (window.locat
  * Usage:
  * const { connected, sendAction, lastRawMessage, gameState } = useGameSocket(gameId, playerId);
  */
-export function useGameSocket(gameId?: string, playerId?: number, baseUrl: string = defaultBase): UseGameSocketReturn {
+export function useGameSocket(gameId?: string, playerId?: number, onChatMessage?: (msg: any) => void, baseUrl: string = defaultBase): UseGameSocketReturn {
     const [connected, setConnected] = useState(false);
     const [lastRawMessage, setLastRawMessage] = useState<any | null>(null);
     const [gameState, setGameState] = useState<any | null>(null);
@@ -41,6 +41,11 @@ export function useGameSocket(gameId?: string, playerId?: number, baseUrl: strin
         } catch (e) {
             // leave as text if JSON parse fails
             console.error("Failed to parse WS message as JSON", e);
+        }
+        // 1. Check if it's a chat message
+        if (parsed && parsed.type === "chat_message") {
+            if (onChatMessage) onChatMessage(parsed.data);
+            return; // Stop here, don't try to parse as game state
         }
         console.debug(parsed);
         setLastRawMessage(parsed);

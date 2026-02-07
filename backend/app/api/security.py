@@ -13,7 +13,7 @@ import jwt
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-async def get_current_user_http(token: str = Depends(oauth2_scheme)):
+async def get_current_user_http(token: str = Depends(oauth2_scheme)) -> int:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = payload.get("user_id")
@@ -30,7 +30,7 @@ async def get_current_user_http(token: str = Depends(oauth2_scheme)):
         )
 
 
-async def get_current_user_ws(websocket: WebSocket, token: str = Query(...)):
+async def get_current_user_ws(websocket: WebSocket, token: str = Query(...)) -> int:
     try:
         # 1. Decode and Validate the JWT token from the query parameter
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

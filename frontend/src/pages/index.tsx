@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { GameBoard } from '@/components/GameBoard';
 import { DiceRoller } from '@/components/DiceRoller';
 import { PlayerPanel } from '@/components/PlayerPanel';
@@ -82,9 +82,11 @@ const Index = () => {
     // 1. Refactor: Renamed for clarity - this is *our* player's ID
     const [localPlayerId] = useState<number>(() => Number(new URLSearchParams(window.location.search).get("playerId") ?? 0));
     const [localGameId] = useState<string | undefined>(() => new URLSearchParams(window.location.search).get("gameId") ?? undefined);
-
+    const [messages, setMessages] = useState<{ sender: string, text: string, color: string }[]>([]);
     // 2. State variables managed by the server state
-    const { connected, sendAction, lastRawMessage, gameState } = useGameSocket(localGameId, localPlayerId);
+    const { connected, sendAction, lastRawMessage, gameState } = useGameSocket(localGameId, localPlayerId, (newMsg) => {
+        setMessages(prev => [...prev, newMsg]);
+    });
 
     // We will derive players and currentTurnPlayerId from gameState
     const playersDict: Record<string, Player> = gameState?.players || {};
@@ -137,6 +139,33 @@ const Index = () => {
     const isAffordable = purchasePrice !== undefined && localPlayer
         ? localPlayer.money >= purchasePrice
         : false;
+
+    const [chatInput, setChatInput] = useState("");
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll chat to bottom
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+
+    const sendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!chatInput.trim()) return;
+
+        const newMessage = {
+            sender: gameState?.players[localPlayerId]?.name || "Player",
+            text: chatInput,
+            color: gameState?.players[localPlayerId]?.color || "#000"
+        };
+
+        // Send to server
+        await sendAction({ action: 'CHAT', payload: newMessage });
+        console.log("Sent chat message:", newMessage);
+        setChatInput("");
+    };
     // 3. Update useEffect logic to use gameState as the main source of truth
     useEffect(() => {
 
@@ -251,7 +280,17 @@ const Index = () => {
     const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
 
     // Find the full property object from the ID
-    const selectedProperty = boardSpaces.find(s => s.id === selectedPropertyId);
+    const selectedProperty: Mutable_property | null = useMemo(() => {
+        if (!gameState?.mutable_properties) return null;
+
+        // If it's an array:
+        if (Array.isArray(gameState.mutable_properties)) {
+            return gameState.mutable_properties.find(s => s.id === selectedPropertyId);
+        }
+
+        // If it's an object/dictionary:
+        return Object.values(gameState.mutable_properties).find(s => s.id === selectedPropertyId);
+    }, [gameState?.mutable_properties, selectedPropertyId]);
 
     // Check if the local player owns this property
     const isOwner = gameState?.players[localPlayerId]?.properties.includes(selectedPropertyId);
@@ -344,8 +383,9 @@ const Index = () => {
                         <GameBoard players={playersArray} onSelectSpace={(id) => setSelectedPropertyId(id)} />
                     </div>
                     <div className="w-80 flex flex-col gap-4">
+
                         {/* Property Management Panel */}
-                        {selectedProperty && (
+                        {selectedProperty as Mutable_property[] && (
                             <div className="bg-card border-2 border-border rounded-lg p-4 shadow-lg">
                                 <h3 className="text-xl font-bold border-b pb-2 mb-2">{selectedProperty.name}</h3>
 
@@ -357,15 +397,15 @@ const Index = () => {
                                             <Button
                                                 variant="outline"
                                                 className="text-xs"
-                                                onClick={() => sendAction('MORTGAGE', { propertyId: selectedPropertyId })}
+                                                onClick={() => sendAction({ action: 'MORTGAGE', payload: { propertyId: selectedPropertyId } })}
                                             >
                                                 Mortgage
                                             </Button>
                                             <Button
                                                 variant="destructive"
                                                 className="text-xs"
-                                                disabled={!selectedProperty.details?.houses}
-                                                onClick={() => sendAction('SELL_HOUSE', { propertyId: selectedPropertyId })}
+                                                disabled={!(selectedProperty.details?.houses)}
+                                                onClick={() => sendAction({ action: 'SELL_HOUSE', payload: { propertyId: selectedPropertyId } })}
                                             >
                                                 Sell House
                                             </Button>
@@ -373,7 +413,7 @@ const Index = () => {
                                     </div>
                                 ) : (
                                     <p className="text-sm italic text-muted-foreground">
-                                        {selectedProperty.details?.price ? `Price: $${selectedProperty.details.price}` : "Cannot be purchased"}
+                                        {selectedProperty?.details?.price ? `Price: $${selectedProperty.details.price}` : "Cannot be purchased"}
                                     </p>
                                 )}
                                 <Button
@@ -400,6 +440,7 @@ const Index = () => {
                     )}
                     {/* Right panel - Controls */}
                     <div className="w-64 space-y-4">
+
                         <div className="bg-card border-2 border-border rounded-lg p-6">
                             <h3 className="text-xl font-bold mb-4 text-center">Game Controls</h3>
 
@@ -421,6 +462,43 @@ const Index = () => {
                                     End Turn
                                 </Button>
                             </div>
+                        </div>
+                        {/* CHAT BOX */}
+                        <div className="flex flex-col h-64 bg-card border-2 border-border rounded-lg overflow-hidden shadow-sm">
+                            <div className="bg-muted p-2 border-b font-bold text-xs uppercase tracking-wider">
+                                Game Chat
+                            </div>
+
+                            <div
+                                ref={scrollRef}
+                                className="flex-1 overflow-y-auto p-2 space-y-2 text-sm"
+                            >
+                                {messages.length === 0 && (
+                                    <p className="text-muted-foreground italic text-center text-xs mt-4">
+                                        No messages yet. Say hello!
+                                    </p>
+                                )}
+                                {messages.map((msg, i) => (
+                                    <div key={i} className="break-words">
+                                        <span className="font-bold" style={{ color: msg.color }}>
+                                            {msg.sender}:
+                                        </span>{" "}
+                                        <span className="text-foreground">{msg.text}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <form onSubmit={sendMessage} className="p-2 border-t flex gap-2">
+                                <input
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    placeholder="Type a message..."
+                                    className="flex-1 bg-background text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                                <Button type="submit" size="sm" className="h-8 px-2 text-xs">
+                                    Send
+                                </Button>
+                            </form>
                         </div>
                         {currentTurnPlayer &&
                             <div className="bg-card border-2 border-border rounded-lg p-4">

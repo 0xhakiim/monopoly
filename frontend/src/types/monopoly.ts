@@ -67,9 +67,11 @@ export interface GameState {
     positions: Record<number, number>; // player ID -> position
     money: Record<number, number>; // player ID -> money
     board: any; // mutable_properties array/object
-    player: IncomingPlayerTuple[];
+    players: Record<string, Player>;
     phase: string;
     propertyForSale?: SquareTile;
+    turn?: number;
+    mutable_properties: Mutable_property[];
     dice?: [number, number];
     highest_bid?: number;
     highest_bidder_id?: number | null;

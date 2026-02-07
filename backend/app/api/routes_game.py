@@ -7,7 +7,7 @@ from fastapi import (
     Depends,
 )
 from typing import List, Dict
-from app.game.schemas import WSMessage
+from app.schemas.game_schemas import WSMessage
 from app.models.Player import Player
 from app.models.board import Square, get_board
 from app.models.Game import Game, Turn
@@ -27,6 +27,7 @@ async def game_endpoint(
     ws: WebSocket, uuid: str, player_id: int = Depends(get_current_user_ws)
 ):
     await ws.accept()
+    print(f"Player {player_id} connected to game {uuid}")
     game_manager = getsManager()
     game: Game = game_manager.get_game(uuid)
 
@@ -76,6 +77,10 @@ async def game_endpoint(
                 await game.mortgage_property(player_id, square_id)
                 await game.broadcast(get_game_snapshot("property_mortgaged"))
                 continue
+            if data.action == "CHAT":
+                message_data = data.payload
+                # Broadcast this message to all connected clients in the same game room
+                await game.broadcast({"type": "chat_message", "data": message_data})
             # 1. Validation: Is it the player's turn?
             # (Only validate for actions that require a turn)
             is_turn = game.state["turn_index"] == current_player.id

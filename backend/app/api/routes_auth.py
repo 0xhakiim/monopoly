@@ -37,3 +37,12 @@ async def login(data: loginUserSchema) -> TokenResponse:
             token_type="",
         )
     return TokenResponse(access_token=access_token, token_type="bearer")
+
+
+@router.post("/auth/change_password")
+async def change_password(username: str, old_password: str, new_password: str):
+    result = auth_service.change_password(username, old_password, new_password)
+    if result:
+        return {"message": "Password changed successfully"}
+    else:
+        return {"message": "Failed to change password"}

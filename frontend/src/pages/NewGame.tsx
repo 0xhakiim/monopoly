@@ -9,7 +9,7 @@ import { useParams, useNavigate } from "react-router-dom";
 
 
 export const NewGame = () => {
-    const { connected, sendAction, lastRawMessage } = useQueueSocket();
+    const { connected, sendAction, lastRawMessage, closeConnection } = useQueueSocket();
     const { id } = useParams<{ id: string }>();
     const token = jwtDecode<{ user_id: number, exp: number }>(localStorage.getItem("access_token") ?? "");
     function joinQueue() {
@@ -40,6 +40,7 @@ export const NewGame = () => {
                     id = i[1].id;
                 }
             }
+            closeConnection();
             navigate(`/game?gameId=${gameId}&playerId=${id}`);
         }
     }, [lastRawMessage, navigate]);

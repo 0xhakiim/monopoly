@@ -35,6 +35,21 @@ def authenticate_user(username: str, password: str):
         return create_token(user.id)
 
 
+def change_password(username: str, old_password: str, new_password: str) -> bool:
+    session = db()
+    user = session.query(User).filter_by(username=username).first()
+    if not user:
+        print("User not found")
+        return False
+    if not check_password(old_password, user.password):
+        print("Old password is incorrect")
+        return False
+    user.password = hash_password(new_password)
+    session.commit()
+    print("Password changed successfully")
+    return True
+
+
 def create_token(user_id: int):
     payload = {
         "user_id": user_id,

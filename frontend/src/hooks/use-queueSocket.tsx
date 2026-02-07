@@ -9,6 +9,7 @@ type UseGameSocketReturn = {
     connected: boolean;
     sendAction: (message: WSMessage) => void;
     lastRawMessage: any | null;
+    closeConnection: () => void;
 };
 
 // Default base (already WS-safe)
@@ -72,10 +73,16 @@ export default function useQueueSocket(
         ws.send(JSON.stringify(msg));
     }, []);
 
-
+    const closeConnection = useCallback(() => {
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+    }, []);
     return {
         connected,
         sendAction,
         lastRawMessage,
+        closeConnection
     };
 }

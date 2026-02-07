@@ -1,7 +1,14 @@
 import fastapi
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.api import routes_auth, matchmaking, routes_dev, routes_game, routes_debug
+from app.api import (
+    routes_auth,
+    matchmaking,
+    routes_dev,
+    routes_game,
+    routes_debug,
+    routes_profile,
+)
 from app.models.gamesManager import getsManager
 from contextlib import asynccontextmanager
 import app.db.init_db as db_init
@@ -41,6 +48,7 @@ app.include_router(matchmaking.router)
 app.include_router(routes_game.router)
 app.include_router(routes_debug.router)
 app.include_router(routes_dev.router)
+app.include_router(routes_profile.router)
 
 
 @app.get("/")

@@ -15,13 +15,14 @@ connections: Dict[int, WebSocket] = {}
 
 @router.websocket("/ws/matchmaking")
 async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws)):
+    global queue, connections
     await ws.accept()
     try:
         while True:
             data = await ws.receive_json()
             if data.get("action") == "join":
                 print(data)
-
+                print(connections)
                 if user_id not in connections:
                     queue.append(user_id)
                     connections[user_id] = ws
@@ -41,14 +42,16 @@ async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws))
                         {"error": f"Player {user_id} is not in the queue"}
                     )
             else:
+                print("Invalid command received:", data)
                 await ws.send_json(
                     {
                         "error": "Invalid command. Use 'join:<user_id>' or 'leave:<user_id>'"
                     }
                 )
-
+            print(queue)
             # Check if we can start a game
             if len(queue) >= 2:
+                print("Starting a game...")
                 player1 = queue.pop(0)
                 player2 = queue.pop(0)
                 await connections[player1].send_json(
@@ -85,6 +88,7 @@ async def join_queue(ws: WebSocket, user_id: int = Depends(get_current_user_ws))
                     await connections[player2].send_json(
                         {"error": "Failed to create game."}
                     )
+                    print("Failed to create game.")
                     return 0
     except WebSocketDisconnect:
         if user_id in queue:
