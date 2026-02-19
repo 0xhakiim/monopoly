@@ -45,7 +45,7 @@ async def game_endpoint(
     # Helper function to get the current snapshot of the game
     def get_game_snapshot(event_type: str, extra_data: dict = {}) -> dict:
         players_list = list(game.get_players().values())
-        print(players_list)
+
         snapshot = {
             "type": event_type,
             "state": {

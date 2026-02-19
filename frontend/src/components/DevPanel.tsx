@@ -52,8 +52,8 @@ const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: 
             </select>
 
             <div style={buttonGrid}>
-                <button onClick={() => sendUpdate({ target: 'player', player_id: selectedPlayer, field: 'money', value: 5000 })}>
-                    💰 Set $5000
+                <button onClick={() => sendUpdate({ target: 'player', player_id: selectedPlayer, field: 'money', value: 10 })}>
+                    💰 Set $10
                 </button>
                 <button onClick={() => sendUpdate({ target: 'player', player_id: selectedPlayer, field: 'position', value: 39 })}>
                     🏎 Go to Boardwalk

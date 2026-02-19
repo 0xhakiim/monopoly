@@ -12,6 +12,7 @@ import AuctionModel from '@/components/Auction';
 import BuildHouseModal from '@/components/BuildHouseModal';
 import DevPanel from '@/components/DevPanel';
 import { boardSpaces } from '@/data/boardSpaces';
+import { GameOverModal } from '@/components/GameOverModel';
 
 
 
@@ -88,6 +89,7 @@ const Index = () => {
         setMessages(prev => [...prev, newMsg]);
     });
 
+
     // We will derive players and currentTurnPlayerId from gameState
     const playersDict: Record<string, Player> = gameState?.players || {};
     const playersArray: Player[] = gameState?.players || [];
@@ -142,7 +144,15 @@ const Index = () => {
 
     const [chatInput, setChatInput] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const isGameOver = gameState?.phase === "GAME_OVER";
 
+    // Determine winner: player with the most money (server may also expose gameState.winner)
+    const winner: Player | null =
+        gameState?.winner
+            ? (playersArray.find(p => p.id === gameState.winner) ?? null)
+            : playersArray.length > 0
+                ? playersArray.reduce((best, p) => ((p.money ?? 0) > (best.money ?? 0) ? p : best))
+                : null;
     // Auto-scroll chat to bottom
     useEffect(() => {
         if (scrollRef.current) {
@@ -329,6 +339,13 @@ const Index = () => {
             <div className="max-w-[1400px] mx-auto">
                 <div className="flex gap-8 items-start justify-center">
 
+                    {isGameOver && (
+                        <GameOverModal
+                            winner={winner}
+                            players={playersArray}
+                            onRestart={handleResetGame}
+                        />
+                    )}
                     {/* Buy Decision Modal */}
                     {
                         isDecideToBuyPhase && propertyForSale && (

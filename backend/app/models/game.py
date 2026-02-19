@@ -57,6 +57,9 @@ class Game:
             "mutable_properties": self._initialize_mutable_properties(),
             "auction": None,
         }
+        self.chance_deck = CHANCE_CARDS
+        self.community_deck = COMMUNITY_CHEST_CARDS
+
         self.turn_order = [p.id for p in players]
         self.turn = Turn(self.turn_order[0])
 
@@ -95,7 +98,12 @@ class Game:
             "turn_index": self.players_map[playerId].id,
         }
         self.state["phase"] = "AUCTION"
-        await self.broadcast({"type": "AUCTION_STARTED", "state": self.state})
+        await self.broadcast(
+            {
+                "type": "AUCTION_STARTED",
+                "state": {**self.state, "players": list(self.get_players().values())},
+            }
+        )
 
     async def place_bid(self, player_id: int, amount: int):
         auction = self.state["auction"]
@@ -114,7 +122,12 @@ class Game:
             auction["active_players"]
         )
 
-        await self.broadcast({"type": "AUCTION_UPDATE", "state": self.state})
+        await self.broadcast(
+            {
+                "type": "AUCTION_UPDATE",
+                "state": {**self.state, "players": list(self.get_players().values())},
+            }
+        )
 
     def end_turn(self):
         print("########Ending turn for player:", self.turn.player_id)
@@ -131,6 +144,11 @@ class Game:
         auction["active_players"].remove(player_id)
 
         if len(auction["active_players"]) == 1:
+            self.state["auction"]["highest_bidder"] = auction["active_players"][0]
+            self.state["auction"]["winner"] = auction["active_players"][
+                0
+            ]  # Default to 0 if no bids were made
+
             await self._finalize_auction()
 
     def get_players(self):
@@ -177,7 +195,7 @@ class Game:
 
     async def roll_dice(self, player_id: int) -> tuple[int, int]:
         dice = (random.randint(1, 6), random.randint(1, 6))
-        dice = (2, 2)  # For testing purposes, remove this line in production
+
         await self.handle_position(player_id, dice)
 
         return dice
@@ -269,10 +287,9 @@ class Game:
             self.state["phase"] = "WAIT_FOR_NEXT_TURN"
             return
 
-        if not mutable_state["is_mortgaged"]:
+        if mutable_state and not mutable_state.get("is_mortgaged", False):
             # Pass dice roll for utility calculation
             rent = self._calculate_rent(owner, square, mutable_state, dice)
-
             if rent > 0:
                 if player.money < rent:
                     await self.handle_insufficient_funds(
@@ -291,6 +308,10 @@ class Game:
                         "to": owner.id,
                         "amount": rent,
                         "square_id": square.id,
+                        "state": {
+                            **self.state,
+                            "players": list(self.get_players().values()),
+                        },
                     }
                 )
                 print(f"Player {player.id} paid ${rent} rent to Player {owner.id}")
@@ -300,8 +321,16 @@ class Game:
     async def _handle_tax_square(self, player: Player, square: Square):
         """Handles landing on Income Tax or Luxury Tax."""
         if square.tax_amount:
+            if player.money < square.tax_amount:
+                await self.handle_insufficient_funds(
+                    debtor_id=player.user_id,
+                    creditor_id=None,
+                    amount_due=square.tax_amount,
+                )
+                return
             player.money -= square.tax_amount
             print(f"Player {player.id} paid ${square.tax_amount} tax.")
+
             await self.broadcast(
                 {
                     "type": "TAX_PAID",
@@ -326,6 +355,7 @@ class Game:
     async def _execute_card(
         self, card: dict[str, Any], player: Player, dice: tuple[int, int]
     ):
+        print(f"Executing card for Player {player.id}: {card}")
         t = card["type"]
 
         if t == "MOVE":
@@ -630,8 +660,9 @@ class Game:
 
     def _check_game_over(self):
         active = [
-            p for p in self.players_map.values() if not getattr(p, "bankrupt", False)
+            p for p in self.players_map.values() if not getattr(p, "is_bankrupt", False)
         ]
+        print(f"Active players remaining: {active}")
         if len(active) == 1:
             self.state["phase"] = "GAME_OVER"
             winner = active[0].id
@@ -639,7 +670,11 @@ class Game:
                 self.broadcast(
                     {
                         "type": "GAME_OVER",
-                        "winner": winner,
+                        "state": {
+                            **self.state,
+                            "winner": winner,
+                            "players": list(self.get_players().values()),
+                        },
                     }
                 )
             )
@@ -716,7 +751,7 @@ class Game:
                 "creditor": creditor_id,
             }
         )
-
+        print(f"Player {debtor.id} has declared bankruptcy. Creditor: {creditor_id}")
         self._check_game_over()
 
     def _player_has_houses(self, player_id: int) -> bool:
@@ -781,7 +816,10 @@ class Game:
             await self.broadcast(
                 {
                     "type": "game_update",
-                    "state": self.state,
+                    "state": {
+                        **self.state,
+                        "players": list(self.get_players().values()),
+                    },
                     "message": f"Player {player_id} cannot afford property {square_id}.",
                 }
             )
@@ -839,7 +877,7 @@ class Game:
         await self.broadcast(
             {
                 "type": "WAIT_FOR_NEXT_TURN",
-                "state": {**self.state},
+                "state": {**self.state, "players": list(self.get_players().values())},
             }
         )
 
