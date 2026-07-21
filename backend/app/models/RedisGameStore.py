@@ -1,10 +1,15 @@
+from __future__ import annotations
 import json
 from uuid import UUID, uuid4
-from app.models.Game import Game
+
 from redis.asyncio import Redis
 
 redis: Redis | None = None
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.Game import Game
 
 async def get_redis() -> Redis:
     global redis

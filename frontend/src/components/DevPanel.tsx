@@ -1,10 +1,11 @@
+import type { Player } from '@/types/monopoly';
 import React, { useState } from 'react';
 
-const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: any[], currentPhase: string }) => {
-    const [selectedPlayer, setSelectedPlayer] = useState(players[0]?.id);
+const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: Record<string, Player>, currentPhase: string }) => {
+    const [selectedPlayer, setSelectedPlayer] = useState(Object.values(players)[0]?.id);
     const [isOpen, setIsOpen] = useState(false);
     const [propId, setPropId] = useState(0);
-
+    const [cardType, setCardType] = useState('chance');
     const handleAddProperty = () => {
         sendUpdate({
             target: 'add_property',
@@ -15,7 +16,7 @@ const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: 
     };
     const sendUpdate = async (payload: { [key: string]: any }) => {
         try {
-            await fetch(`http://localhost:8000/dev/${gameId}/update`, {
+            await fetch(`http://127.0.0.1:8000/dev/${gameId}/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -36,6 +37,7 @@ const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: 
         );
     }
 
+
     return (
         <div style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -48,7 +50,7 @@ const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: 
             {/* --- Player Manipulation --- */}
             <h4>Modify Player</h4>
             <select onChange={(e) => setSelectedPlayer(e.target.value)} value={selectedPlayer}>
-                {players.map(p => <option key={p.id} value={p.id}>{p.name} (ID: {p.id})</option>)}
+                {Object.values(players).map(p => <option key={p.id} value={p.id}>{p.name} (ID: {p.id})</option>)}
             </select>
 
             <div style={buttonGrid}>
@@ -88,10 +90,22 @@ const DevPanel = ({ gameId, players, currentPhase }: { gameId: string, players: 
                     Force Auction
                 </button>
                 <button onClick={() => {
-                    const nextIdx = (players.findIndex(p => p.id === selectedPlayer) + 1) % players.length;
+                    const nextIdx = (Object.values(players).findIndex(p => p.id === selectedPlayer) + 1) % Object.values(players).length;
                     sendUpdate({ target: 'game', field: 'turn_index', value: nextIdx });
                 }}>
                     ⏭ Skip Turn
+                </button>
+            </div>
+            {/* test cards functionality */}
+            <hr />
+            <h4>Test Cards</h4>
+            <div style={buttonGrid}>
+                <select onChange={(e) => setCardType(e.target.value)} value={cardType}>
+                    <option value="chance">Chance</option>
+                    <option value="community">Community Chest</option>
+                </select>
+                <button onClick={() => sendUpdate({ target: 'draw_card', field: 'draw_card', value: cardType })}>
+                    Draw Card
                 </button>
             </div>
         </div>
@@ -104,7 +118,7 @@ const panelStyle = {
     background: '#222', color: '#fff', padding: '15px',
     borderRadius: '8px', boxShadow: '0 0 10px rgba(0,0,0,0.5)', zIndex: 9999,
     fontSize: '12px'
-};
+} as const;
 
 const buttonGrid = {
     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: '10px'

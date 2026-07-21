@@ -1,21 +1,33 @@
+
 import asyncio
+from pprint import pprint
 import random
-import re
+
 from turtle import position
 from typing import List, Dict, Any
+import uuid
 from pydantic import TypeAdapter
+import redis
 from sqlalchemy import UUID, true
 from app.models.Player import Player
 from app.models.board import get_board, Square
-
+from app.models.RedisGameStore import RedisGameStore
 STATIC_BOARD_TILES: Dict[int, Square] = get_board().tiles
-
-
+redis_store = RedisGameStore()  # Singleton instance for Redis operations
 class Turn:
     def __init__(self, player_id: int):
         self.player_id: int = player_id
         self.doubles = 0
         self.active = True
+    def to_dict(self) -> dict:
+        return {"player_id": self.player_id, "doubles": self.doubles, "active": self.active}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Turn":
+        t = cls(data["player_id"])
+        t.doubles = data.get("doubles", 0)
+        t.active = data.get("active", True)
+        return t
 
 
 CHANCE_CARDS: List[Dict[str, Any]] = [
@@ -59,9 +71,9 @@ class Game:
         }
         self.chance_deck = CHANCE_CARDS
         self.community_deck = COMMUNITY_CHEST_CARDS
-
+        self._persist_callback = None
         self.turn_order = [p.id for p in players]
-        self.turn = Turn(self.turn_order[0])
+        self.turn = Turn(0)
 
     @classmethod
     def from_matchmaking(cls, game_id: UUID, player_ids: List[int]):
@@ -71,20 +83,26 @@ class Game:
             Player(user_id=pid, id=i, name=f"Player {pid}")
             for i, pid in enumerate(player_ids)
         ]
-
+        
         return cls(game_id, new_players)
 
     @classmethod
     def from_redis(cls, game_id: UUID, data: dict):
         """Factory: Rebuilds from a Redis JSON dictionary."""
-        # Reconstruct Player objects from stored dicts
+        
         restored_players = [Player(**p_dict) for p_dict in data["players_list"]]
-
+    
         instance = cls(game_id, restored_players)
         instance.state = data["state"]
+    
+        # JSON round-trip turns int dict keys into strings — restore them
+        instance.state["mutable_properties"] = {
+            int(k): v for k, v in instance.state["mutable_properties"].items()
+        }
+    
         instance.turn_order = data["turn_order"]
-        instance.turn = Turn(**data["turn"])
-
+        instance.turn = Turn.from_dict(data["turn"])  # from the earlier fix
+       
         return instance
 
     async def start_auction(self, id: int, playerId: int):
@@ -134,11 +152,12 @@ class Game:
         self.state["turn_index"] = (self.state["turn_index"] + 1) % len(self.turn_order)
         self.turn = Turn(self.turn_order[self.state["turn_index"]])
         player = self.players_map[self.players[self.turn.player_id]]
+        
         if player.in_jail:
             self.state["phase"] = "JAIL_DECISION"
         else:
             self.state["phase"] = "WAIT_FOR_ROLL"
-
+        redis_store.save_game(self)  # Persist the game state to Redis
     async def fold_auction(self, player_id: int):
         auction = self.state["auction"]
         auction["active_players"].remove(player_id)
@@ -165,7 +184,7 @@ class Game:
         player.money -= price
         player.properties.append(square_id)
 
-        self.state["mutable_properties"][square_id]["owner_id"] = winner
+        self.state["mutable_properties"][int(square_id)]["owner_id"] = winner
         self.state["auction"] = None
         self.state["phase"] = "WAIT_FOR_NEXT_TURN"
         await self.broadcast(
@@ -436,8 +455,8 @@ class Game:
         player.position = target
         square = STATIC_BOARD_TILES[target]
 
-        if square.type == "GoToJail":
-            await self._handle_go_to_jail(player)
+        await self.handle_position(player.user_id, (0, 0))  # No dice roll for card movement
+        
 
     async def _move_to_nearest(self, player: Player, square_type: str, dice):
         pos = player.position
@@ -880,11 +899,42 @@ class Game:
                 "state": {**self.state, "players": list(self.get_players().values())},
             }
         )
-
+    # dev methods
+    def draw_card(self, card_type: str) -> dict:
+        if card_type == "chance":
+            card = self.chance_deck.pop(0)
+            self.chance_deck.append(card)
+            return card
+        elif card_type == "community":
+            card = self.community_deck.pop(0)
+            self.community_deck.append(card)
+            return card
+        else:
+            raise ValueError("Invalid card type. Must be 'chance' or 'community'.")
+    async def leave_game(self,player_id: int):
+        print(f"Player {player_id} leaving game {self.uuid}")
+        if player_id in self.connections:
+            del self.connections[player_id]
+        if player_id in self.players_map:
+            del self.players_map[player_id]
+        if player_id in self.players:
+            del self.players[player_id]
+        if player_id in self.turn_order:
+            self.turn_order.remove(player_id)
+        if self.state["turn_index"] >= len(self.turn_order):
+            self.state["turn_index"] = 0
+        self._check_game_over()
+        # Broadcast to all remaining players that this player has left
+        for pid, conn in self.connections.items():
+            await conn.send_json({"type": "player_left", "player_id": player_id})
     # Connection methods
+    def set_persist_callback(self, cb):
+        self._persist_callback = cb
     async def broadcast(self, message: dict):
         for ws in self.connections.values():
             await ws.send_json(message)
+        if self._persist_callback:
+            self._persist_callback(self)
 
     async def send_to(self, player_id: int, message: dict):
         if ws := self.connections.get(player_id):

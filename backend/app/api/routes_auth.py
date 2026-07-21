@@ -30,7 +30,14 @@ async def register(data: registerUserSchema) -> TokenResponse:
 @router.post("/auth/login")
 async def login(data: loginUserSchema) -> TokenResponse:
     # Login logic here
-    access_token = auth_service.authenticate_user(data.username, data.password)
+    try:
+        access_token = auth_service.authenticate_user(data.username, data.password)
+    except Exception as e:
+        print(f"Error during login: {e}")
+        return TokenResponse(
+            access_token="",
+            token_type="",
+        )
     if not access_token:
         return TokenResponse(
             access_token="",

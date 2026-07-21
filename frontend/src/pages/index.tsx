@@ -191,9 +191,9 @@ const Index = () => {
         // Handle raw messages like server notifications/dice results
         if (lastRawMessage) {
             if (typeof lastRawMessage === "object") {
-                if (lastRawMessage.type === "game_update" && gameState?.dice !== undefined) {
+                if ((lastRawMessage.type === "game_update" || lastRawMessage.type === "game_start") && gameState?.dice !== undefined) {
                     setLastDice(gameState?.dice);
-                    console.debug("Dice result from server:", lastRawMessage.dice);
+                    console.debug("Dice result from server:", gameState?.dice);
                 }
                 if (lastRawMessage.type === "reset_game") {
                     setLastDice([0, 0]);
@@ -348,10 +348,10 @@ const Index = () => {
                     )}
                     {/* Buy Decision Modal */}
                     {
-                        isDecideToBuyPhase && propertyForSale && (
+                        isDecideToBuyPhase && gameState && (
 
                             <BuyDecisionModal
-                                property={propertyForSale}
+                                property={propertyForSale ?? { id: 0, name: "Unknown", details: { price: 0, color: "#000" } } as SquareTile}
                                 onBuy={handleBuyProperty}
                                 onPass={handlePassOnBuy}
                                 isAffordable={isAffordable}
@@ -360,8 +360,8 @@ const Index = () => {
                     {showdevpanel && (
                         <DevPanel
                             gameId={localGameId ?? ""}
-                            players={gameState.players}
-                            currentPhase={gameState.phase}
+                            players={playersArray.reduce((acc, player) => { acc[player.id] = player; return acc; }, {} as Record<string, Player>)}
+                            currentPhase={gameState?.phase ?? ""}
                         />
                     )}
                     {showBuildModal && (

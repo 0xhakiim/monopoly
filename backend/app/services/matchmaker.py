@@ -1,15 +1,15 @@
 import asyncio
 from typing import List, Dict
-from app.models.matchmaking import MatchGroup
+from app.models.lobby import Lobby
 from app.models.gamesManager import getsManager
 
 
 class Matchmaker:
     def __init__(self):
-        self.queue: List[MatchGroup] = []
+        self.queue: List[Lobby] = []
         self.connections = {}
 
-    def add_group(self, group: MatchGroup):
+    def add_group(self, group: Lobby):
         self.queue.append(group)
 
     def remove_player(self, user_id: int):
@@ -19,7 +19,7 @@ class Matchmaker:
 
     async def check_and_start_matches(self):
         """
-        Algorithm: Groups MatchGroups together until target_size is hit.
+        Algorithm: Groups Lobbys together until target_size is hit.
         """
         if not self.queue:
             return
@@ -43,7 +43,7 @@ class Matchmaker:
                         self.queue.remove(g)
                     break
 
-    async def _trigger_game_start(self, groups: List[MatchGroup]):
+    async def _trigger_game_start(self, groups: List[Lobby]):
         all_player_ids: list[int] = []
 
         for g in groups:
@@ -53,6 +53,7 @@ class Matchmaker:
         # DELEGATION: Let the GameManager handle the Monopoly logic
         manager = getsManager()
         game = manager.create_game(all_player_ids)
+        manager.save_game_to_redis(game)  # Persist the game state to Redis
         # manager.save_game_to_redis(game)
         print(list(game.get_players().items()))
         # Notify everyone

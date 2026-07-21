@@ -5,57 +5,57 @@ import axios from 'axios';
 import { useState } from 'react';
 
 type LoginForm = {
-    username: string;
-    password: string;
-    remember: boolean;
+  username: string;
+  password: string;
+  remember: boolean;
 };
 
 type JwtPayload = {
-    user_id: number;
-    exp: number;
+  user_id: number;
+  exp: number;
 };
 
 export default function Login() {
-    const navigate = useNavigate();
-    const [isLoading, setIsLoading] = useState(false);
-    const [serverError, setServerError] = useState<string | null>(null);
-    const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<LoginForm>({
-        defaultValues: { username: '', password: '', remember: false },
-    });
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
+    defaultValues: { username: '', password: '', remember: false },
+  });
 
-    async function login(data: LoginForm) {
-        setIsLoading(true);
-        setServerError(null);
-        try {
-            const res = await axios.post('http://localhost:8000/auth/login', {
-                username: data.username,
-                password: data.password,
-            });
-            const token: string = res.data['access_token'];
-            if (token) {
-                const storage = data.remember ? localStorage : sessionStorage;
-                storage.setItem('access_token', token);
-                const payload = jwtDecode<JwtPayload>(token);
-                navigate(`/newgame/${payload.user_id}`);
-            }
-        } catch (err: any) {
-            setServerError(
-                err?.response?.data?.detail ?? 'Incorrect username or password.'
-            );
-        } finally {
-            setIsLoading(false);
-        }
+  async function login(data: LoginForm) {
+    setIsLoading(true);
+    setServerError(null);
+    try {
+      const res = await axios.post('http://127.0.0.1:8000/auth/login', {
+        username: data.username,
+        password: data.password,
+      });
+      const token: string = res.data['access_token'];
+      if (token) {
+        const storage = localStorage;
+        storage.setItem('access_token', token);
+        const payload = jwtDecode<JwtPayload>(token);
+        navigate(`/newgame/${payload.user_id}`);
+      }
+    } catch (err: any) {
+      setServerError(
+        err?.response?.data?.detail ?? 'Incorrect username or password.'
+      );
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    return (
-        <>
-            <style>{`
+  return (
+    <>
+      <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -387,136 +387,136 @@ export default function Login() {
         }
       `}</style>
 
-            <div className="l-root w-full">
+      <div className="l-root w-full">
 
-                {/* Left decorative panel */}
-                <div className="l-left">
-                    <div className="l-left-inner">
-                        <div className="l-brand">
-                            <span className="l-brand-icon">🎩</span>
-                            <span className="l-brand-name">Monopoly</span>
-                        </div>
-
-                        <div className="l-left-headline">
-                            <h2>Roll the dice,<br />own the board.</h2>
-                            <p>
-                                Jump back into your game. Properties, deals,
-                                and rivalries are waiting for you.
-                            </p>
-
-                            <div className="l-features">
-                                {['Real-time multiplayer', 'Live game chat', 'Auction & bidding system'].map(f => (
-                                    <div className="l-feature" key={f}>
-                                        <div className="l-feature-dot" />
-                                        {f}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="l-left-footer">© 2025 Monopoly Online</div>
-                </div>
-
-                {/* Right form panel */}
-                <div className="l-right">
-                    <div className="l-form-wrapper">
-
-                        <div className="l-form-header">
-                            <p className="l-welcome">Welcome back</p>
-                            <h1 className="l-form-title">Sign in to<br />your account</h1>
-                            <p className="l-form-subtitle">Enter your credentials to continue</p>
-                        </div>
-
-                        {serverError && (
-                            <div className="l-server-error">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
-                                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                                </svg>
-                                {serverError}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSubmit(login)} noValidate>
-
-                            {/* Username */}
-                            <div className="l-field">
-                                <label className="l-label" htmlFor="username">Username</label>
-                                <div className="l-input-wrap">
-                                    <input
-                                        id="username"
-                                        type="text"
-                                        autoComplete="username"
-                                        placeholder="your_username"
-                                        className={`l-input${errors.username ? ' l-input--error' : ''}`}
-                                        {...register('username', { required: 'Username is required' })}
-                                    />
-                                </div>
-                                {errors.username && <p className="l-field-error">{errors.username.message}</p>}
-                            </div>
-
-                            {/* Password */}
-                            <div className="l-field">
-                                <label className="l-label" htmlFor="password">Password</label>
-                                <div className="l-input-wrap">
-                                    <input
-                                        id="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        autoComplete="current-password"
-                                        placeholder="••••••••"
-                                        className={`l-input l-input--pr${errors.password ? ' l-input--error' : ''}`}
-                                        {...register('password', {
-                                            required: 'Password is required',
-                                            minLength: { value: 4, message: 'Minimum 4 characters' },
-                                        })}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="l-eye-btn"
-                                        onClick={() => setShowPassword(v => !v)}
-                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                    >
-                                        {showPassword ? (
-                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-                                                <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-                                                <line x1="1" y1="1" x2="23" y2="23" />
-                                            </svg>
-                                        ) : (
-                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                                <circle cx="12" cy="12" r="3" />
-                                            </svg>
-                                        )}
-                                    </button>
-                                </div>
-                                {errors.password && <p className="l-field-error">{errors.password.message}</p>}
-                            </div>
-
-                            {/* Remember me */}
-                            <div className="l-remember">
-                                <input
-                                    type="checkbox"
-                                    id="remember"
-                                    className="l-checkbox"
-                                    {...register('remember')}
-                                />
-                                <label htmlFor="remember" className="l-remember-label">
-                                    Keep me signed in
-                                </label>
-                            </div>
-
-                            <button type="submit" className="l-btn" disabled={isLoading}>
-                                {isLoading && <span className="l-spinner" />}
-                                {isLoading ? 'Signing in…' : 'Sign In'}
-                            </button>
-
-                        </form>
-
-                        <p className="l-form-footer">Secure connection · Sessions are encrypted</p>
-                    </div>
-                </div>
+        {/* Left decorative panel */}
+        <div className="l-left">
+          <div className="l-left-inner">
+            <div className="l-brand">
+              <span className="l-brand-icon">🎩</span>
+              <span className="l-brand-name">Monopoly</span>
             </div>
-        </>
-    );
+
+            <div className="l-left-headline">
+              <h2>Roll the dice,<br />own the board.</h2>
+              <p>
+                Jump back into your game. Properties, deals,
+                and rivalries are waiting for you.
+              </p>
+
+              <div className="l-features">
+                {['Real-time multiplayer', 'Live game chat', 'Auction & bidding system'].map(f => (
+                  <div className="l-feature" key={f}>
+                    <div className="l-feature-dot" />
+                    {f}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="l-left-footer">© 2025 Monopoly Online</div>
+        </div>
+
+        {/* Right form panel */}
+        <div className="l-right">
+          <div className="l-form-wrapper">
+
+            <div className="l-form-header">
+              <p className="l-welcome">Welcome back</p>
+              <h1 className="l-form-title">Sign in to<br />your account</h1>
+              <p className="l-form-subtitle">Enter your credentials to continue</p>
+            </div>
+
+            {serverError && (
+              <div className="l-server-error">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {serverError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit(login)} noValidate>
+
+              {/* Username */}
+              <div className="l-field">
+                <label className="l-label" htmlFor="username">Username</label>
+                <div className="l-input-wrap">
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="your_username"
+                    className={`l-input${errors.username ? ' l-input--error' : ''}`}
+                    {...register('username', { required: 'Username is required' })}
+                  />
+                </div>
+                {errors.username && <p className="l-field-error">{errors.username.message}</p>}
+              </div>
+
+              {/* Password */}
+              <div className="l-field">
+                <label className="l-label" htmlFor="password">Password</label>
+                <div className="l-input-wrap">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className={`l-input l-input--pr${errors.password ? ' l-input--error' : ''}`}
+                    {...register('password', {
+                      required: 'Password is required',
+                      minLength: { value: 4, message: 'Minimum 4 characters' },
+                    })}
+                  />
+                  <button
+                    type="button"
+                    className="l-eye-btn"
+                    onClick={() => setShowPassword(v => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                {errors.password && <p className="l-field-error">{errors.password.message}</p>}
+              </div>
+
+              {/* Remember me */}
+              <div className="l-remember">
+                <input
+                  type="checkbox"
+                  id="remember"
+                  className="l-checkbox"
+                  {...register('remember')}
+                />
+                <label htmlFor="remember" className="l-remember-label">
+                  Keep me signed in
+                </label>
+              </div>
+
+              <button type="submit" className="l-btn" disabled={isLoading}>
+                {isLoading && <span className="l-spinner" />}
+                {isLoading ? 'Signing in…' : 'Sign In'}
+              </button>
+
+            </form>
+
+            <p className="l-form-footer">Secure connection · Sessions are encrypted</p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }

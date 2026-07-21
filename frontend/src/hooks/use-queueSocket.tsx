@@ -15,7 +15,7 @@ type UseGameSocketReturn = {
 // Default base (already WS-safe)
 const defaultBase =
     (import.meta.env.DEV
-        ? "ws://localhost:8000"
+        ? "ws://127.0.0.1:8000"
         : (window.location.origin.startsWith("https") ? "wss://" : "ws://") +
         window.location.host);
 

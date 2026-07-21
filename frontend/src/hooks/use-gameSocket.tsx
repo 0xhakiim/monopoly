@@ -13,7 +13,7 @@ type UseGameSocketReturn = {
     gameState: GameState | null;
 };
 
-const defaultBase = (import.meta.env.DEV ? "ws://localhost:8000" : (window.location.origin.startsWith("https") ? "wss://" : "ws://") + window.location.host);
+const defaultBase = (import.meta.env.DEV ? "ws://127.0.0.1:8000" : (window.location.origin.startsWith("https") ? "wss://" : "ws://") + window.location.host);
 
 /**
  * useGameSocket
@@ -124,6 +124,7 @@ export function useGameSocket(gameId?: string, playerId?: number, onChatMessage?
 
     const sendAction = useCallback((message: WSMessage) => {
         const ws = actionWsRef.current;
+        console.debug("[ws/action] sending", message);
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             console.warn("Action socket not open, cannot send action", message);
             return;

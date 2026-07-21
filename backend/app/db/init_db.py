@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from app.models.User import Base
 
 
 def get_db():
@@ -12,7 +13,7 @@ def get_db():
 
 # Create the engine once (usually at app startup)
 
-engine = create_engine("mysql+pymysql://root@localhost/monopoly", pool_pre_ping=True)
-
+engine = create_engine("postgresql+psycopg2://postgres:admin@localhost:5432/monopoly", pool_pre_ping=True)
+Base.metadata.create_all(bind=engine)
 # Create a Session factory
 SessionLocal = sessionmaker(bind=engine)

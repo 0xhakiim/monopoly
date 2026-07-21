@@ -17,6 +17,7 @@ class DevUpdate(BaseModel):
 @router.post("/{game_id}/update")
 async def manual_update(game_id: str, data: DevUpdate):
     manager: gamesManager = getsManager()
+    
     game: Game = manager.get_game(game_id)
 
     if not game:

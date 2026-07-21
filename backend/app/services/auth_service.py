@@ -53,9 +53,10 @@ def change_password(username: str, old_password: str, new_password: str) -> bool
 def create_token(user_id: int):
     payload = {
         "user_id": user_id,
-        "exp": datetime.datetime.now() + datetime.timedelta(hours=1),
+        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1),
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
+    print(f"Token created for user_id {user_id}: {token}")
     return token
 
 

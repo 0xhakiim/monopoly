@@ -1,4 +1,5 @@
 from dis import Positions
+from pprint import pprint
 from annotated_types import T
 from fastapi import (
     APIRouter,
@@ -35,13 +36,10 @@ async def game_endpoint(
         await ws.send_json({"type": "error", "message": "Game not found"})
         await ws.close()
         return
-    await ws.send_json(
-        {
-            "type": "reconnect",
-            "state": {**game.state, "players": list(game.get_players().values())},
-        },
-    )
+    
 
+
+    
     # Helper function to get the current snapshot of the game
     def get_game_snapshot(event_type: str, extra_data: dict = {}) -> dict:
         players_list = list(game.get_players().values())
@@ -51,24 +49,49 @@ async def game_endpoint(
             "state": {
                 **game.state,
                 "players": players_list,
-                "turn": game.turn.player_id,
+                "turn": game.turn_order[game.state["turn_index"]],
             },
         }
+        # If the game is in a phase where a property is for sale, include that property in the snapshot (good for reconncet)
+        if game.state["phase"] == "DECIDE_TO_BUY":
+            current_player = game.players_map.get(game.players.get(player_id))
+            if current_player:
+                prop = STATIC_BOARD_TILES[current_player.position]
+                snapshot["state"]["propertyForSale"] = prop.model_dump()
+        if game.state["phase"] == "AUCTION":
+            snapshot["state"]["auction"] = {
+                "property_id": game.state.get("auction_property_id"),
+                "highest_bid": game.state.get("highest_bid"),
+                "highest_bidder": game.state.get("highest_bidder"),
+                "active_bidders": game.state.get("active_bidders"),
+            }
         if extra_data:
             snapshot["state"].update(extra_data)
+        
         return snapshot
 
     try:
-        # Register connection
+        is_reconnect = player_id in game.players_map and player_id not in game.connections
         game.connections[player_id] = ws
 
-        # Initial Join Broadcast
-        await game.broadcast(get_game_snapshot("game_start"))
+        # Full snapshot only to the (re)connecting player
+        await ws.send_json(get_game_snapshot("game_start"))
+
+        if is_reconnect:
+            # Lightweight notice to everyone else
+            for pid, conn in game.connections.items():
+                if pid != player_id:
+                    await conn.send_json({"type": "player_reconnected", "player_id": player_id})
 
         while True:
             data_raw = await ws.receive_json()
             data = WSMessage(**data_raw)
             current_player = game.players_map.get(player_id)
+            if data.action =="leave_game":
+                print(f"Player {player_id} leaving game {game.uuid}")
+                await game.leave_game(player_id)
+                await ws.close()
+                break
             if not current_player:
                 await ws.send_json({"type": "error", "message": "Player not in game!"})
                 continue
@@ -83,7 +106,7 @@ async def game_endpoint(
                 await game.broadcast({"type": "chat_message", "data": message_data})
             # 1. Validation: Is it the player's turn?
             # (Only validate for actions that require a turn)
-            is_turn = game.state["turn_index"] == current_player.id
+            is_turn = game.turn_order[game.state["turn_index"]] == current_player.id
             if (
                 data.action in ["roll_dice", "buy_property", "pass_on_buy"]
                 and not is_turn
@@ -127,16 +150,19 @@ async def game_endpoint(
                 print("Passing on buying property: ", game.state["turn_index"])
                 game.state["phase"] = "AUCTION_PROPERTY"
                 await game.start_auction(current_player.position, player_id)
+
             elif data.action == "jail_action":
                 action_type = data.payload.get("action", "")
                 print(f"Player {player_id} performing jail action: {action_type}")
                 await game.jail_decision(player_id, action_type)
                 await game.broadcast(get_game_snapshot("game_update"))
+
             elif data.action == "build_house":
                 property_id = data.payload.get("square_id", -1)
                 print(f"Player {player_id} building on property: {property_id}")
                 await game.build_house(player_id, property_id)
                 await game.broadcast(get_game_snapshot("house_built"))
+
             if game.state["phase"] == "AUCTION":
                 if data.action == "place_bid":
                     print("bidding !!!!!!!!!!!", game.state)
@@ -148,6 +174,7 @@ async def game_endpoint(
                 elif data.action == "fold_auction":
                     print(f"Player {player_id} folding from auction")
                     await game.fold_auction(player_id)
+
             if game.state["phase"] == "WAIT_FOR_NEXT_TURN":
                 if game.turn.active == False:
                     print(f"Player {player_id} ending turn")
