@@ -2,7 +2,7 @@ import { jwtDecode } from 'jwt-decode';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type LoginForm = {
   username: string;
@@ -20,6 +20,18 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      const payload = jwtDecode<JwtPayload>(token);
+      navigate(`/newgame/${payload.user_id}`, { replace: true });
+    } catch {
+      localStorage.removeItem('access_token');
+    }
+  }, [navigate]);
 
   const {
     register,
@@ -42,12 +54,15 @@ export default function Login() {
         const storage = localStorage;
         storage.setItem('access_token', token);
         const payload = jwtDecode<JwtPayload>(token);
-        navigate(`/newgame/${payload.user_id}`);
+        navigate(`/newgame/${payload.user_id}`, { replace: true });
       }
-    } catch (err: any) {
-      setServerError(
-        err?.response?.data?.detail ?? 'Incorrect username or password.'
-      );
+    } catch (err: unknown) {
+      const responseDetail =
+        typeof err === 'object' && err !== null && 'response' in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+
+      setServerError(responseDetail ?? 'Incorrect username or password.');
     } finally {
       setIsLoading(false);
     }

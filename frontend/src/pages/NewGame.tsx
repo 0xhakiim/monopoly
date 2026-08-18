@@ -1,58 +1,110 @@
-import useQueueSocket from "@/hooks/use-queueSocket";
-import { useState, useEffect } from "react";
-import { jwtDecode } from "jwt-decode";
-import { useParams, useNavigate } from "react-router-dom";
+import useQueueSocket from '@/hooks/use-queueSocket';
+import { useState, useEffect } from 'react';
+import { jwtDecode } from 'jwt-decode';
+import { useParams, useNavigate } from 'react-router-dom';
 
-
-
-
-
+type JwtPayload = {
+  user_id: number;
+  exp: number;
+};
 
 export const NewGame = () => {
-    const { connected, sendAction, lastRawMessage, closeConnection } = useQueueSocket();
-    const { id } = useParams<{ id: string }>();
-    const token = jwtDecode<{ user_id: number, exp: number }>(localStorage.getItem("access_token") ?? "");
-    function joinQueue() {
-        if (!connected) {
-            console.warn("Not connected to queue socket");
-            return;
-        }
+  const { connected, sendAction, lastRawMessage, closeConnection } = useQueueSocket();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [conn, setConn] = useState(false);
 
-        sendAction({ action: "join", payload: { player_id: id } });
-        setConn(true);
+  const token = (() => {
+    const rawToken = localStorage.getItem('access_token');
+    if (!rawToken) return null;
 
-        console.log("Joined queue, waiting for game to start...");
+    try {
+      return jwtDecode<JwtPayload>(rawToken);
+    } catch {
+      return null;
     }
-    let [conn, setConn] = useState(false);
-    let navigate = useNavigate();
-    useEffect(() => {
-        if (!lastRawMessage) return;
+  })();
 
-        if (lastRawMessage.action === "match_found") {
-            console.debug(lastRawMessage);
-            const gameId = lastRawMessage.game_id;
-            console.debug(gameId);
-            console.log("players!!!!!!!!!!!!!1", lastRawMessage.players)
-            const token = jwtDecode<{ user_id: number, exp: number }>(localStorage.getItem("access_token") ?? "0");
-            let id;
-            for (let i of lastRawMessage.players) {
-                if (i[0] === token.user_id) {
-                    id = i[1].id;
-                }
-            }
-            closeConnection();
-            navigate(`/game?gameId=${gameId}&playerId=${id}`);
+  const resolvedPlayerId = Number(id ?? token?.user_id ?? 0);
+
+  useEffect(() => {
+    if (!token || !token.user_id) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    if (!id && token.user_id) {
+      navigate(`/newgame/${token.user_id}`, { replace: true });
+      return;
+    }
+
+    if (id && Number(id) !== token.user_id) {
+      navigate(`/newgame/${token.user_id}`, { replace: true });
+    }
+  }, [id, navigate, token]);
+
+  function joinQueue() {
+    if (!connected) {
+      console.warn('Not connected to queue socket');
+      return;
+    }
+
+    if (!token || !token.user_id) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    sendAction({ action: 'join', payload: { player_id: resolvedPlayerId } });
+    setConn(true);
+
+    console.log('Joined queue, waiting for game to start...');
+  }
+
+  useEffect(() => {
+    if (!lastRawMessage) return;
+
+    if (lastRawMessage.action === 'match_found') {
+      const gameId = lastRawMessage.game_id;
+      const currentToken = (() => {
+        const rawToken = localStorage.getItem('access_token');
+        if (!rawToken) return null;
+
+        try {
+          return jwtDecode<JwtPayload>(rawToken);
+        } catch {
+          return null;
         }
-    }, [lastRawMessage, navigate]);
-    return (
-        <div>
-            <h2>New Game Page</h2>
-            <p>Set up a new game here.</p>
-            <button onClick={joinQueue}>Start Game</button>
-            {conn ? <p>Waiting for game to start...</p> : null}
-            {lastRawMessage == "Game created" ? <p>Message from server: {JSON.stringify(lastRawMessage)}</p> : null}
-            {conn ? <button onClick={() => { sendAction({ action: "leave", payload: {} }); setConn(false); }}>Leave Queue</button> : null}
+      })();
 
-        </div >
-    );
-}
+      let playerId: number | undefined;
+      for (const entry of lastRawMessage.players) {
+        if (entry[0] === currentToken?.user_id) {
+          playerId = entry[1].id;
+        }
+      }
+
+      closeConnection();
+      navigate(`/game?gameId=${gameId}&playerId=${playerId}`);
+    }
+  }, [closeConnection, lastRawMessage, navigate]);
+
+  return (
+    <div>
+      <h2>New Game Page</h2>
+      <p>Set up a new game here.</p>
+      <button onClick={joinQueue}>Start Game</button>
+      {conn ? <p>Waiting for game to start...</p> : null}
+      {lastRawMessage == 'Game created' ? <p>Message from server: {JSON.stringify(lastRawMessage)}</p> : null}
+      {conn ? (
+        <button
+          onClick={() => {
+            sendAction({ action: 'leave', payload: {} });
+            setConn(false);
+          }}
+        >
+          Leave Queue
+        </button>
+      ) : null}
+    </div>
+  );
+};
