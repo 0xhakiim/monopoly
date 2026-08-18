@@ -1,13 +1,22 @@
 
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 
 export default function Signup() {
+    const navigate = useNavigate();
+
     async function onSubmit(data: { username: string, password: string, email?: string }) {
         try {
-            let res = await axios.post("http://127.0.0.1:8000/auth/register", data);
-            localStorage.setItem("access_token", res.data["access_token"]);
-            console.log(res.data);
+            const res = await axios.post('http://127.0.0.1:8000/auth/register', data);
+            const token = res.data['access_token'];
+
+            if (token) {
+                localStorage.setItem('access_token', token);
+                const payload = jwtDecode<{ user_id: number }>(token);
+                navigate(`/newgame/${payload.user_id}`, { replace: true });
+            }
         } catch (error) {
             console.error(error);
         }
