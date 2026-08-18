@@ -92,3 +92,9 @@ export interface Mutable_property {
     details?: PropertyDetails;
     name: string;
 }
+
+export interface LobbyPlayer {
+    id: number;
+    ready: boolean;
+    username: string;
+}

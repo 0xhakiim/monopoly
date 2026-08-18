@@ -25,7 +25,7 @@ async def matchmaking_endpoint(
 
                 new_group = MatchGroup([user_id] + friends, target_size=target)
                 matchmaker_service.add_group(new_group)
-
+                
                 await ws.send_json({"status": "queued", "group_id": new_group.id})
 
                 # Run the algorithmic check
@@ -34,6 +34,9 @@ async def matchmaking_endpoint(
             elif action == "leave":
                 matchmaker_service.remove_player(user_id)
                 await ws.send_json({"status": "left"})
+            elif action =="send_message":
+                print("player sent a message")
+                pass
 
     except WebSocketDisconnect:
         matchmaker_service.remove_player(user_id)

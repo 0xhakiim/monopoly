@@ -8,6 +8,8 @@ from app.api import (
     routes_game,
     routes_debug,
     routes_profile,
+    routes_lobby,
+    routes_friends
 )
 from app.models.gamesManager import getsManager
 from contextlib import asynccontextmanager
@@ -49,6 +51,8 @@ app.include_router(routes_game.router)
 app.include_router(routes_debug.router)
 app.include_router(routes_dev.router)
 app.include_router(routes_profile.router)
+app.include_router(routes_friends.router)
+app.include_router(routes_lobby.router)
 
 
 @app.get("/")

@@ -3,15 +3,15 @@ from app.schemas.auth_schema import registerUserSchema, loginUserSchema, TokenRe
 from app.services import auth_service
 from typing import List, Optional
 
-router = APIRouter()
+router = APIRouter(prefix="/auth")
 
 
-@router.get("/auth/status")
+@router.get("/status")
 async def auth_status():
     return {"status": "Authentication service is running"}
 
 
-@router.post("/auth/register")
+@router.post("/register")
 async def register(data: registerUserSchema) -> TokenResponse:
     # Registration logic here
     user = auth_service.register_user(data.username, data.password)
@@ -27,7 +27,7 @@ async def register(data: registerUserSchema) -> TokenResponse:
     return token
 
 
-@router.post("/auth/login")
+@router.post("/login")
 async def login(data: loginUserSchema) -> TokenResponse:
     # Login logic here
     try:
@@ -46,7 +46,7 @@ async def login(data: loginUserSchema) -> TokenResponse:
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 
-@router.post("/auth/change_password")
+@router.post("/change_password")
 async def change_password(username: str, old_password: str, new_password: str):
     result = auth_service.change_password(username, old_password, new_password)
     if result:

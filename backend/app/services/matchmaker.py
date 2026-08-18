@@ -16,7 +16,15 @@ class Matchmaker:
         # Remove group if a player disconnects
         self.queue = [g for g in self.queue if user_id not in g.player_ids]
         self.connections.pop(user_id, None)
-
+    def get_group(self,lobby_id:str):
+        for i in self.queue:
+            if i.lobby_id ==lobby_id:
+                return i
+            else:
+                return None
+    def invite(self,user_id,friend_id):
+        for i in self.queue:
+            pass
     async def check_and_start_matches(self):
         """
         Algorithm: Groups Lobbys together until target_size is hit.
